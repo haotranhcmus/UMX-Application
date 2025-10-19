@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, StyleSheet, Pressable } from "react-native";
 import AppText from "@/components/AppText";
 import { theme } from "@/theme";
@@ -12,9 +12,25 @@ interface WeeklyCalendarProps {
 
 export default function WeeklyCalendar({
   onDateSelect,
-  selectedDay = new Date(),
-  setSelectedDay,
+  selectedDay: initialSelectedDay, // Đổi tên để rõ ràng hơn
+  setSelectedDay: externalSetSelectedDay,
 }: WeeklyCalendarProps) {
+  // ✅ Internal state
+  const [internalSelectedDay, setInternalSelectedDay] = useState(
+    initialSelectedDay || new Date()
+  );
+
+  // Sử dụng internal state hoặc external state
+  const selectedDay = initialSelectedDay || internalSelectedDay;
+  const setSelectedDay = externalSetSelectedDay || setInternalSelectedDay;
+
+  // Sync với external state khi thay đổi
+  useEffect(() => {
+    if (initialSelectedDay) {
+      setInternalSelectedDay(initialSelectedDay);
+    }
+  }, [initialSelectedDay]);
+
   const weekDays = useMemo(
     () => ["CN", "T2", "T3", "T4", "T5", "T6", "T7"],
     []
@@ -69,7 +85,7 @@ export default function WeeklyCalendar({
     setWeekOffset(0);
     setSelectedDay(new Date());
     onDateSelect?.(new Date());
-  }, [onDateSelect]);
+  }, [onDateSelect, setSelectedDay]);
 
   // Chọn ngày
   const handleDayPress = useCallback(
@@ -77,7 +93,7 @@ export default function WeeklyCalendar({
       setSelectedDay(date || new Date());
       onDateSelect?.(date || new Date());
     },
-    [onDateSelect]
+    [onDateSelect, setSelectedDay]
   );
 
   // Kiểm tra ngày có phải hôm nay không
@@ -142,10 +158,6 @@ export default function WeeklyCalendar({
                   today && !selected && styles.dayButtonToday,
                 ]}
                 onPress={() => handleDayPress(item.date)}
-                android_ripple={{
-                  color: theme.colors.blueLight,
-                  borderless: true,
-                }}
               >
                 <AppText
                   bold
