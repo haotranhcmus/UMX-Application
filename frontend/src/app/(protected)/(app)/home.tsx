@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, StyleSheet, TouchableOpacity, Image } from "react-native";
+import { StyleSheet, TouchableOpacity, Image } from "react-native";
 import AppText from "@/components/AppText";
 import { theme } from "@/theme";
 import WeeklyCalendar from "@/components/WeeklyCalendar";
@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
   },
   selectedDateText: {
     marginTop: 20,
-    fontSize: 16,
+    fontSize: theme.typography.fontSizes.md,
     color: theme.colors.text,
   },
   backgroundImage: {
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
   },
   reportText: {
     marginTop: 20,
-    fontSize: 18,
+    fontSize: theme.typography.fontSizes.md,
     color: theme.colors.textLight,
     opacity: 0.7,
   },
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     height: 30,
   },
   createReportText: {
-    fontSize: 18,
+    fontSize: theme.typography.fontSizes.md,
     color: theme.colors.primary,
   },
   createReportContainer: {

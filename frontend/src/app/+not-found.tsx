@@ -3,6 +3,7 @@ import { StyleSheet } from "react-native";
 
 import AppText from "@/components/AppText";
 import { View } from "@/components/Themed"; // Adjust the import path as necessary
+import { theme } from "@/theme";
 
 export default function NotFoundScreen() {
   return (
@@ -27,14 +28,14 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   title: {
-    fontSize: 20,
+    fontSize: theme.typography.fontSizes.xl,
   },
   link: {
     marginTop: 15,
     paddingVertical: 15,
   },
   linkText: {
-    fontSize: 14,
+    fontSize: theme.typography.fontSizes.sm,
     color: "#2e78b7",
   },
 });

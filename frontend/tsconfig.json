@@ -10,7 +10,8 @@
       "@/constants/*": ["src/constants/*"],
       "@/navigation/*": ["src/navigation/*"],
       "@/utils/*": ["src/utils/*"],
-      "@/theme/*": ["src/theme/*"]
+      "@/theme/*": ["src/theme/*"],
+      "@/types/*": ["src/types/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "nativewind-env.d.ts"]

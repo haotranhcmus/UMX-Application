@@ -18,6 +18,8 @@ export type Typography = {
     md: number;
     lg: number;
     xl: number;
+    xxl: number;
+    xxxl: number;
   };
 };
 

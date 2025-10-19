@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     flex: 3,
   },
   maintitle: {
-    fontSize: 30,
+    fontSize: theme.typography.fontSizes.xxl,
     marginBottom: theme.layout.spacing.sm,
     textAlign: "center",
   },

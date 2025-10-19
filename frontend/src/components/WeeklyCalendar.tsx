@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   monthText: {
-    fontSize: 18,
+    fontSize: theme.typography.fontSizes.md,
     color: theme.colors.text,
     flex: 1,
     textAlign: "center",
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dayLabel: {
-    fontSize: 12,
+    fontSize: theme.typography.fontSizes.sm,
     color: theme.colors.textLight,
     marginBottom: 8,
   },
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.primary,
   },
   dayNumber: {
-    fontSize: 16,
+    fontSize: theme.typography.fontSizes.md,
     color: theme.colors.text,
   },
   dayNumberSelected: {
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   todayButtonText: {
-    fontSize: 14,
+    fontSize: theme.typography.fontSizes.sm,
     color: theme.colors.primary,
   },
   selectedDateInfo: {
@@ -261,12 +261,12 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.border,
   },
   selectedDateLabel: {
-    fontSize: 12,
+    fontSize: theme.typography.fontSizes.sm,
     color: theme.colors.textLight,
     marginBottom: 4,
   },
   selectedDateValue: {
-    fontSize: 16,
+    fontSize: theme.typography.fontSizes.md,
     color: theme.colors.text,
   },
 });

@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     height: 280,
   },
   maintitle: {
-    fontSize: 45,
+    fontSize: theme.typography.fontSizes.xxxl,
     marginBottom: theme.layout.spacing.sm,
     textAlign: "center",
     paddingHorizontal: theme.layout.spacing.lg,

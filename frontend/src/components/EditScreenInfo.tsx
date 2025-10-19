@@ -7,6 +7,7 @@ import { View } from "./Themed";
 import AppText from "./AppText";
 
 import Colors from "@/constants/Colors";
+import { theme } from "@/theme";
 
 export default function EditScreenInfo({ path }: { path: string }) {
   return (
@@ -66,7 +67,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   getStartedText: {
-    fontSize: 17,
+    fontSize: theme.typography.fontSizes.md,
     lineHeight: 24,
     textAlign: "center",
   },

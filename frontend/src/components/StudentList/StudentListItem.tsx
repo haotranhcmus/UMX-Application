@@ -4,11 +4,7 @@ import { View } from "@/components/Themed";
 import AppText from "@/components/AppText";
 import Icon from "@expo/vector-icons/AntDesign";
 import { theme } from "@/theme";
-
-interface Student {
-  name: string;
-  image: any;
-}
+import { Student } from "@/types/student";
 
 interface StudentListItemProps {
   student: Student;

@@ -23,11 +23,14 @@ export const CustomSearchBar = ({
   placeholder = "Tìm kiếm...",
   lightTheme = true,
 }: CustomSearchBarProps) => {
+  const handleChangeText = (text: string) => {
+    onChangeText(text);
+  };
   return (
     <SearchBar
       placeholder={placeholder}
       // @ts-ignore - Type issue with react-native-elements
-      onChangeText={onChangeText}
+      onChangeText={handleChangeText}
       value={value}
       containerStyle={styles.container}
       inputContainerStyle={styles.inputContainer}

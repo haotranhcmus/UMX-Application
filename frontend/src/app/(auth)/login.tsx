@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSizes.md,
   },
   maintitle: {
-    fontSize: 35,
+    fontSize: theme.typography.fontSizes.xxl,
     marginBottom: theme.layout.spacing.sm,
     textAlign: "center",
     paddingHorizontal: theme.layout.spacing.lg,

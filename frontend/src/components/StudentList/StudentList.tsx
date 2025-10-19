@@ -1,11 +1,7 @@
 import React, { useCallback } from "react";
 import { FlatList, StyleSheet, ListRenderItem } from "react-native";
 import { StudentListItem } from "./StudentListItem";
-
-interface Student {
-  name: string;
-  image: any;
-}
+import { Student } from "@/types/student";
 
 interface StudentListProps {
   data: Student[];
@@ -49,7 +45,7 @@ export const StudentList = React.memo(
       [handleStudentPress]
     );
 
-    const keyExtractor = useCallback((item: Student) => item.name, []);
+    const keyExtractor = useCallback((item: Student) => item.id, []);
 
     return (
       <FlatList

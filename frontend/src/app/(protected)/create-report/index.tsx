@@ -1,13 +1,38 @@
-import React, { useState, useMemo, useCallback } from "react";
-import { StyleSheet } from "react-native";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { StyleSheet, ActivityIndicator } from "react-native";
 import { theme } from "@/theme";
 import { View } from "@/components/Themed";
 import { CustomSearchBar } from "@/components/SearchBar";
 import { StudentList } from "@/components/StudentList";
-import student from "@assets/fake_data/student";
+import MOCK_STUDENTS from "@assets/fake_data/student";
+import { Student } from "@/types/student";
+import AppText from "@/components/AppText";
 
 const Search = () => {
   const [search, setSearch] = useState("");
+  const [student, setStudent] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    // Simulate data fetching
+    setLoading(true);
+    setError(null);
+
+    const fetchData = async () => {
+      try {
+        // Simulating network delay
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        setStudent(MOCK_STUDENTS);
+      } catch (err) {
+        setError(err as Error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   // Filter students based on search text
   const filteredStudents = useMemo(() => {
@@ -19,16 +44,39 @@ const Search = () => {
     return student.filter((item) =>
       item.name.toLowerCase().includes(searchLower)
     );
-  }, [search]);
+  }, [search, student]);
 
   // Handle student selection
-  const handleStudentPress = useCallback(
-    (selectedStudent: { name: string; image: any }) => {
-      console.log("Selected student:", selectedStudent.name);
-      // TODO: Navigate to student detail or add to report
-    },
-    []
-  );
+  const handleStudentPress = useCallback((selectedStudent: Student) => {
+    console.log("Selected student:", selectedStudent.name);
+    // TODO: Navigate to student detail or add to report
+  }, []);
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <AppText style={{ color: theme.colors.error }}>{error.message}</AppText>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -41,6 +89,7 @@ const Search = () => {
       <StudentList
         data={filteredStudents}
         onStudentPress={handleStudentPress}
+        ListEmptyComponent={<AppText>Student not found</AppText>}
       />
     </View>
   );

@@ -1,4 +1,6 @@
-const student = [
+import { Student } from "@/types/student";
+
+const student: Student[] = [
   {
     id: "1",
     name: "Hào Hổ",
