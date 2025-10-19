@@ -21,7 +21,7 @@ interface ButtonProps {
   textStyle?: StyleProp<TextStyle>;
 }
 
-const Button: React.FC<ButtonProps> = ({
+const GreenButton: React.FC<ButtonProps> = ({
   title,
   onPress,
   variant = "primary",
@@ -126,4 +126,4 @@ const styles = StyleSheet.create({
 });
 
 // Keep the default export as Button to avoid breaking existing code
-export default Button;
+export default GreenButton;

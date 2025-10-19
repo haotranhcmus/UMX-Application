@@ -8,8 +8,19 @@ export const Images = {
 
   // Images folder
   avatar: require("../../assets/images/avatar.png"),
-  homeScreenImg: require("../../assets/images/home_screen_img.png"),
+  welcomeScreenImg: require("../../assets/images/welcome-screen-img.png"),
   logo: require("../../assets/images/logo.png"),
+
+  // Screen specific images
+  homeScreenImg: require("../../assets/images/home-screen-img.png"),
+  createReportImg: require("../../assets/images/create-report-img.png"),
+
+  // Face icons
+  calmFace: require("../../assets/images/faces/calm-face.png"),
+  laughingFace: require("../../assets/images/faces/laughing-face.png"),
+  angryFace: require("../../assets/images/faces/angry-face.png"),
+  smileFace: require("../../assets/images/faces/smile-face.png"),
+  sadFace: require("../../assets/images/faces/sad-face.png"),
 } as const;
 
 // Type cho autocomplete

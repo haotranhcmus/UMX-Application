@@ -35,6 +35,7 @@ export type Colors = {
   borderDark: string;
   white: string;
   shadow: string;
+  blueLight: string;
 };
 
 // Define the structure for the layout

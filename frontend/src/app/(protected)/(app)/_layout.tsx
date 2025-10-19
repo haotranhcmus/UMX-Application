@@ -7,7 +7,7 @@ function TabBarIcon(props: {
   name: React.ComponentProps<typeof Icon>["name"];
   color?: string;
 }) {
-  return <Icon size={20} style={{ marginBottom: -3 }} {...props} />;
+  return <Icon size={20} {...props} />;
 }
 
 export default function Layout() {

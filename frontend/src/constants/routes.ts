@@ -14,6 +14,7 @@ export const ROUTES = {
     AAC: "aac" as const,
     PROGRESS: "progress" as const,
     CHAT_AI: "chat-ai" as const,
+    CREATE_REPORT: "create-report" as const,
     // Add more app routes here as needed
   },
 } as const;

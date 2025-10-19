@@ -16,7 +16,7 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.container}>
       <Logo />
-      <Image style={styles.backgroundImage} source={Images.homeScreenImg} />
+      <Image style={styles.backgroundImage} source={Images.welcomeScreenImg} />
       <AppText style={styles.maintitle} bold>
         Xin chào quý phụ huynh!
       </AppText>

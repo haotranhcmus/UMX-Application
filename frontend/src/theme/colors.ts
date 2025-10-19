@@ -14,4 +14,5 @@ export const colors: Colors = {
   borderDark: "#057457",
   white: "#FFFFFF",
   shadow: "#000000",
+  blueLight: "#F0F8FF",
 };
