@@ -12,19 +12,19 @@ interface WeeklyCalendarProps {
 
 export default function WeeklyCalendar({
   onDateSelect,
-  selectedDay: initialSelectedDay, // Đổi tên để rõ ràng hơn
+  selectedDay: initialSelectedDay, // Rename for clarity
   setSelectedDay: externalSetSelectedDay,
 }: WeeklyCalendarProps) {
-  // ✅ Internal state
+  // Internal state
   const [internalSelectedDay, setInternalSelectedDay] = useState(
     initialSelectedDay || new Date()
   );
 
-  // Sử dụng internal state hoặc external state
+  // Use internal state or external state
   const selectedDay = initialSelectedDay || internalSelectedDay;
   const setSelectedDay = externalSetSelectedDay || setInternalSelectedDay;
 
-  // Sync với external state khi thay đổi
+  // Sync with external state when changed
   useEffect(() => {
     if (initialSelectedDay) {
       setInternalSelectedDay(initialSelectedDay);
@@ -39,7 +39,7 @@ export default function WeeklyCalendar({
 
   const [weekOffset, setWeekOffset] = useState(0);
 
-  // Tính toán ngày trong tuần dựa trên offset
+  // Calculate the days of the week based on the offset
   const dayData = useMemo(() => {
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() + weekOffset * 7);
@@ -51,7 +51,7 @@ export default function WeeklyCalendar({
     });
   }, [weekOffset, today, weekDays]);
 
-  // Lấy tháng hiện tại từ ngày đầu tuần
+  // Get the current month from the start of the week
   const currentMonth = useMemo(() => {
     const monthNames = [
       "Tháng 1",
@@ -70,24 +70,24 @@ export default function WeeklyCalendar({
     return `${monthNames[dayData[0].date.getMonth() < selectedDay.getMonth() ? selectedDay.getMonth() : dayData[0].date.getMonth()]} ${dayData[0].date.getFullYear()}`;
   }, [dayData, selectedDay]);
 
-  // Chuyển tuần trước
+  // Go to previous week
   const goToPreviousWeek = useCallback(() => {
     setWeekOffset((prev) => prev - 1);
   }, []);
 
-  // Chuyển tuần sau
+  // Go to next week
   const goToNextWeek = useCallback(() => {
     setWeekOffset((prev) => prev + 1);
   }, []);
 
-  // Về hôm nay
+  // Go to today
   const goToToday = useCallback(() => {
     setWeekOffset(0);
     setSelectedDay(new Date());
     onDateSelect?.(new Date());
   }, [onDateSelect, setSelectedDay]);
 
-  // Chọn ngày
+  // Select date
   const handleDayPress = useCallback(
     (date: Date) => {
       setSelectedDay(date || new Date());
@@ -96,7 +96,7 @@ export default function WeeklyCalendar({
     [onDateSelect, setSelectedDay]
   );
 
-  // Kiểm tra ngày có phải hôm nay không
+  // Check if the date is today
   const isToday = useCallback(
     (date: Date) => {
       return date.toDateString() === today.toDateString();
@@ -104,7 +104,7 @@ export default function WeeklyCalendar({
     [today]
   );
 
-  // Kiểm tra ngày có được chọn không
+  // Check if the date is selected
   const isSelected = useCallback(
     (date: Date) => {
       return date.toDateString() === selectedDay.toDateString();

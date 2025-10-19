@@ -7,7 +7,7 @@ export default function Layout() {
     "OpenSans-Bold": require("../../assets/fonts/open-sans-bold.ttf"),
   });
 
-  // Chờ font load xong mới render app
+  // Wait for fonts to load before rendering the app
   if (!loaded && !error) {
     return null;
   }
