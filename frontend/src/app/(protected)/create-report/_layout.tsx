@@ -1,8 +1,7 @@
 import AppText from "@/components/AppText";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import Icon from "@expo/vector-icons/AntDesign";
 import { Pressable } from "react-native";
-import { router } from "expo-router";
 import { theme } from "@/theme";
 
 export default function CreateReportLayout() {
@@ -37,11 +36,7 @@ export default function CreateReportLayout() {
           },
         }}
       />
-      <Stack.Screen name="[studentId]" />
-      {/* <Stack.Screen name="student-info" />
-      <Stack.Screen name="report-details" />
-      <Stack.Screen name="preview" />
-      <Stack.Screen name="submit-success" /> */}
+      <Stack.Screen name="[studentId]" options={{ headerShown: false }} />
     </Stack>
   );
 }

@@ -7,6 +7,7 @@ import { StudentList } from "@/components/StudentList";
 import MOCK_STUDENTS from "@assets/fake_data/student";
 import { Student } from "@/types/student";
 import AppText from "@/components/AppText";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const Search = () => {
   const [search, setSearch] = useState("");
@@ -79,7 +80,7 @@ const Search = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <CustomSearchBar
         value={search}
         onChangeText={setSearch}
@@ -91,7 +92,7 @@ const Search = () => {
         onStudentPress={handleStudentPress}
         ListEmptyComponent={<AppText>Student not found</AppText>}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -99,7 +100,7 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: theme.colors.blueLight,
     flex: 1,
-    paddingTop: 4,
+
     paddingHorizontal: 8,
   },
 });

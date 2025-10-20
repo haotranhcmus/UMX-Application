@@ -2,6 +2,8 @@ import React, { useCallback } from "react";
 import { FlatList, StyleSheet, ListRenderItem } from "react-native";
 import { StudentListItem } from "./StudentListItem";
 import { Student } from "@/types/student";
+import { router } from "expo-router";
+import { ROUTES } from "@/constants/routes";
 
 interface StudentListProps {
   data: Student[];
@@ -31,6 +33,7 @@ export const StudentList = React.memo(
     const handleStudentPress = useCallback(
       (student: Student) => {
         onStudentPress?.(student);
+        router.push(`${ROUTES.APP.CREATE_REPORT}/${student.id}`);
       },
       [onStudentPress]
     );

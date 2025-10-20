@@ -18,8 +18,8 @@ export default function Layout() {
         headerShown: false,
       }}
     >
-      <Stack.Screen name="(auth)" />
       <Stack.Screen name="(protected)" />
+      <Stack.Screen name="(auth)" />
     </Stack>
   );
 }

@@ -15,4 +15,7 @@ export const colors: Colors = {
   white: "#FFFFFF",
   shadow: "#000000",
   blueLight: "#F0F8FF",
+  gray: "#A9A9A9",
+  yellow: "#FFD700",
+  info: "#17a2b8",
 };

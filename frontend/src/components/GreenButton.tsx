@@ -6,6 +6,7 @@ import {
   StyleProp,
   ViewStyle,
   TextStyle,
+  Pressable,
 } from "react-native";
 import AppText from "./AppText";
 import { theme } from "@/theme";
@@ -83,7 +84,7 @@ const GreenButton: React.FC<ButtonProps> = ({
   };
 
   return (
-    <TouchableOpacity
+    <Pressable
       style={[
         styles.button,
         getVariantStyles(),
@@ -92,7 +93,6 @@ const GreenButton: React.FC<ButtonProps> = ({
         style,
       ]}
       onPress={onPress}
-      activeOpacity={0.7}
       disabled={disabled || loading}
     >
       {loading ? (
@@ -105,7 +105,7 @@ const GreenButton: React.FC<ButtonProps> = ({
           {title}
         </AppText>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
