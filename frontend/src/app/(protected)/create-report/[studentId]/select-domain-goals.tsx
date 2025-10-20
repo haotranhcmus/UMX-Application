@@ -1,21 +1,23 @@
 import AppText from "@/components/AppText";
 import React from "react";
 import { View, StyleSheet, TouchableOpacity, Pressable } from "react-native";
-import { router, Stack } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import { theme } from "@/theme";
 
 import DomainGoalsList from "@/components/DomainGoalsList";
 
-import MOCK_DOMAINS from "@assets/fake_data/domain";
 import Ionicons from "@expo/vector-icons/build/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useDomain } from "@/providers/DomainProvider";
+import { ROUTES } from "@/constants/routes";
 
 export default function SelectDomainGoalsScreen() {
   const { domains, setDomains } = useDomain();
   const [totalCount, setTotalCount] = React.useState(0);
   const [selectedCount, setSelectedCount] = React.useState(0);
+
+  const studentId = useLocalSearchParams<{ studentId: string }>().studentId;
 
   React.useEffect(() => {
     let total = 0;
@@ -33,14 +35,17 @@ export default function SelectDomainGoalsScreen() {
   }, [domains]);
 
   const handlePress = () => {
-    console.log(domains);
-    setDomains(MOCK_DOMAINS);
-    console.log(domains.map((d) => d.goals.map((g) => g.isSelected)));
-    router.back();
+    console.log("Selected domains:", domains);
+    console.log(
+      "Selected goals:",
+      domains.map((d) => d.goals.filter((g) => g.isSelected))
+    );
+    // ✅ KHÔNG reset về MOCK_DOMAINS, giữ nguyên domains đã chọn
+    router.replace(`/create-report/${studentId}`);
   };
 
   const handleExit = () => {
-    router.back();
+    router.replace(ROUTES.APP.HOME);
   };
 
   // Handle select all goals

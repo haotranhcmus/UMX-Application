@@ -26,6 +26,8 @@ import Ionicons from "@expo/vector-icons/build/Ionicons";
 import { ROUTES } from "@/constants/routes";
 import { useDomain } from "@/providers/DomainProvider";
 
+import { GoalItem } from "@/components/DomainGoalsList/GoalItem";
+
 export default function CreateReportScreen() {
   const { studentId } = useLocalSearchParams<{ studentId: string }>();
   const [student, setStudent] = useState<Student | null>(null);
@@ -37,7 +39,7 @@ export default function CreateReportScreen() {
   const [isButtonDisabled, setIsButtonDisabled] = useState(false);
 
   const handleExit = () => {
-    router.back();
+    router.replace(ROUTES.APP.HOME);
   };
 
   const handleCancelReport = () => {
@@ -160,7 +162,7 @@ export default function CreateReportScreen() {
         }}
       />
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.ratingContainer}>
           <View style={styles.titleContainer}>
             <AppText style={{ fontSize: 20 }} bold>
@@ -212,9 +214,22 @@ export default function CreateReportScreen() {
           <AppText style={styles.feedbackText}>
             {domains.length > 0 ? "Có dữ liệu" : "Không có dữ liệu"}
           </AppText>
-          <AppText style={styles.feedbackText}>
-            {domains.map((domain) => domain.name).join(", ")}
-          </AppText>
+          <View>
+            {domains.map((domain) =>
+              domain.goals.map(
+                (goal) =>
+                  goal.isSelected && (
+                    <GoalItem
+                      key={goal.id}
+                      goal={goal}
+                      domainId={domain.id}
+                      isSelected={goal.isSelected}
+                      onToggle={() => {}}
+                    />
+                  )
+              )
+            )}
+          </View>
         </View>
       </ScrollView>
       <GreenButton
