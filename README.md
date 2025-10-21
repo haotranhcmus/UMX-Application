@@ -19,6 +19,7 @@ UMX/
 
 ```bash
 npm install -g expo-cli
+npm install expo@^54.0.0
 ```
 
 Or use npx without global installation (recommended):
