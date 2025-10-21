@@ -201,284 +201,220 @@ frontend/
 
 ### 🔐 Luồng Authentication
 
-```
-[App Launch]
-    ↓
-[Check Supabase Session]
-    ↓
-├─ Session hợp lệ → [Navigate to Dashboard]
-└─ Không có session → [Navigate to Welcome Screen]
-    ↓
-[Welcome Screen]
-    ↓
-├─ Click "Đăng nhập" → [Login Screen]
-│   ↓
-│   [Nhập email/password]
-│   ↓
-│   [Gọi supabase.auth.signInWithPassword()]
-│   ↓
-│   ├─ Success:
-│   │   1. Supabase tự động lưu session
-│   │   2. Lấy user metadata và profile từ DB
-│   │   3. Lưu user info vào AuthStore
-│   │   4. Navigate to Dashboard
-│   └─ Error:
-│       Hiển thị thông báo lỗi
-│
-└─ Click "Đăng ký" → [Register Screen]
-    ↓
-    [Nhập thông tin]
-    ↓
-    [Gọi supabase.auth.signUp()]
-    ↓
-    ├─ Success:
-    │   1. Tạo user trong auth.users
-    │   2. Trigger tạo profile trong public.users (via trigger)
-    │   3. Gửi email xác nhận (nếu bật)
-    │   4. Navigate to verify email hoặc Dashboard
-    └─ Error:
-        Hiển thị thông báo lỗi
+```mermaid
+flowchart TD
+    Start([App Launch]) --> CheckSession{Check Supabase Session}
+
+    CheckSession -->|Session hợp lệ| Dashboard[Navigate to Dashboard]
+    CheckSession -->|Không có session| Welcome[Welcome Screen]
+
+    Welcome --> Choice{User Action}
+    Choice -->|Click Đăng nhập| Login[Login Screen]
+    Choice -->|Click Đăng ký| Register[Register Screen]
+
+    Login --> InputLogin[Nhập email/password]
+    InputLogin --> CallLogin[Gọi supabase.auth.signInWithPassword]
+    CallLogin --> LoginResult{Result}
+
+    LoginResult -->|Success| LoginSuccess[1. Supabase tự động lưu session<br/>2. Lấy user metadata từ DB<br/>3. Lưu vào AuthStore<br/>4. Navigate to Dashboard]
+    LoginResult -->|Error| LoginError[Hiển thị thông báo lỗi]
+    LoginError --> Login
+    LoginSuccess --> Dashboard
+
+    Register --> InputRegister[Nhập thông tin đăng ký]
+    InputRegister --> CallRegister[Gọi supabase.auth.signUp]
+    CallRegister --> RegisterResult{Result}
+
+    RegisterResult -->|Success| RegisterSuccess[1. Tạo user trong auth.users<br/>2. Trigger tạo profile<br/>3. Gửi email xác nhận<br/>4. Navigate]
+    RegisterResult -->|Error| RegisterError[Hiển thị thông báo lỗi]
+    RegisterError --> Register
+    RegisterSuccess --> VerifyOrDashboard{Email verification enabled?}
+    VerifyOrDashboard -->|Yes| VerifyEmail[Verify Email Screen]
+    VerifyOrDashboard -->|No| Dashboard
+
+    style Start fill:#e1f5ff
+    style Dashboard fill:#c8e6c9
+    style LoginError fill:#ffcdd2
+    style RegisterError fill:#ffcdd2
 ```
 
 ---
 
 ### 🎯 Luồng Tạo Mục Tiêu (Create Goal)
 
-```
-[Dashboard/Students List]
-    ↓
-[Chọn học sinh]
-    ↓
-[Student Detail Screen]
-    ↓
-[Tab: Goals]
-    ↓
-[Click "Add Goal" button]
-    ↓
-[Select Domain Screen]
-├─ Hiển thị 7 domains (Imitation, Language, etc.)
-├─ Mỗi domain có icon, màu sắc, số lượng templates
-└─ Click domain → Navigate to Goal Templates List
-    ↓
-[Goal Templates List Screen]
-├─ Hiển thị danh sách templates theo domain đã chọn
-├─ Có filters: Difficulty, Search
-├─ Hiển thị tags cho mỗi template
-└─ Click template → Navigate to Goal Preview
-    ↓
-[Goal Preview Screen]
-├─ Hiển thị đầy đủ thông tin template
-├─ Similar goals warning (nếu có)
-└─ Actions:
-    ├─ Cancel → Back
-    ├─ Quick Assign → Gán với cấu hình mặc định
-    └─ Customize → Navigate to Edit Goal Details
-        ↓
-[Edit Goal Details Screen]
-├─ Input:
-│   ├─ Target Progress (slider 50-100%)
-│   ├─ Start Date (date picker)
-│   ├─ Target End Date (optional)
-│   └─ Notes (textarea)
-├─ Validation real-time
-└─ Save button
-    ↓
-    └─ Save button
-    ↓
-[Gọi Supabase: INSERT into student_goals]
-    ↓
-├─ Success:
-│   1. Show success toast
-│   2. Navigate back to Student Detail
-│   3. Data tự động sync (Realtime subscription)
-└─ Error:
-    Hiển thị error message
+```mermaid
+flowchart TD
+    Start([Dashboard/Students List]) --> SelectStudent[Chọn học sinh]
+    SelectStudent --> StudentDetail[Student Detail Screen]
+    StudentDetail --> GoalsTab[Tab: Goals]
+    GoalsTab --> ClickAdd[Click Add Goal button]
+
+    ClickAdd --> SelectDomain[Select Domain Screen<br/>Hiển thị 7 domains]
+    SelectDomain --> ClickDomain[Click domain]
+    ClickDomain --> TemplatesList[Goal Templates List Screen]
+
+    TemplatesList --> ShowTemplates[Hiển thị templates theo domain<br/>- Filters: Difficulty, Search<br/>- Tags cho mỗi template]
+    ShowTemplates --> ClickTemplate[Click template]
+    ClickTemplate --> Preview[Goal Preview Screen]
+
+    Preview --> ShowPreview[Hiển thị đầy đủ thông tin<br/>- Full description<br/>- Similar goals warning]
+    ShowPreview --> Action{User Action}
+
+    Action -->|Cancel| StudentDetail
+    Action -->|Quick Assign| QuickAssign[Gán với config mặc định]
+    Action -->|Customize| EditDetails[Edit Goal Details Screen]
+
+    EditDetails --> InputDetails[Input:<br/>- Target Progress 50-100%<br/>- Start Date<br/>- Target End Date optional<br/>- Notes]
+    InputDetails --> Validate{Validation}
+    Validate -->|Invalid| EditDetails
+    Validate -->|Valid| SaveButton[Click Save]
+
+    SaveButton --> InsertDB[Supabase INSERT<br/>into student_goals]
+    QuickAssign --> InsertDB
+
+    InsertDB --> DBResult{Result}
+    DBResult -->|Success| Success[1. Show success toast<br/>2. Navigate back<br/>3. Realtime sync]
+    DBResult -->|Error| Error[Hiển thị error message]
+
+    Success --> StudentDetail
+    Error --> EditDetails
+
+    style Start fill:#e1f5ff
+    style Success fill:#c8e6c9
+    style Error fill:#ffcdd2
+    style SelectDomain fill:#fff9c4
+    style Preview fill:#fff9c4
 ```
 
 ---
 
 ### 📝 Luồng Tạo Báo Cáo (Create Report)
 
-```
-[Dashboard/Students List/Reports List]
-    ↓
-[Chọn "Create Report"]
-    ↓
-[Chọn học sinh (nếu chưa chọn)]
-    ↓
-=== STEP 1: Basic Information ===
-[Create Report - Step 1]
-├─ Hiển thị thông tin học sinh (avatar, name, age)
-├─ Input fields:
-│   ├─ Session Date (date picker, default: hôm nay)
-│   ├─ Duration (number input, default: 60 phút)
-│   ├─ Rating (star rating 1-5)
-│   └─ Participation Level (select dropdown)
-├─ Real-time validation
-└─ Next button (disabled nếu invalid)
-    ↓
-[Click Next]
-    ↓
-[Gọi Supabase: SELECT * FROM student_goals WHERE student_id = ? AND status = 'active']
-    ↓
-=== STEP 2: Select Goals ===
-[Create Report - Step 2]
-├─ Hiển thị active goals grouped by domain
-├─ Mỗi goal có checkbox + info:
-│   ├─ Description
-│   ├─ Current progress bar
-│   ├─ Last session progress
-│   └─ Days since last practice
-├─ "Select All" per domain
-├─ Validation: Phải chọn ít nhất 1 goal
-└─ Next button
-    ↓
-[Click Next]
-    ↓
-=== STEP 3: Record Progress ===
-[Create Report - Step 3]
-├─ Swipeable cards (1 goal per card)
-├─ Progress indicator: "Goal 1 of 5"
-├─ Mỗi card:
-│   ├─ Goal description
-│   ├─ Domain badge
-│   ├─ Before/After progress comparison
-│   ├─ Mini chart (last 5 sessions)
-│   └─ Input fields:
-│       ├─ Progress slider (0-100%)
-│       ├─ Support Level (select)
-│       ├─ Observations (textarea)
-│       └─ Notes (textarea)
-├─ Auto-save draft on blur
-├─ Navigation:
-│   ├─ Previous Goal
-│   ├─ Next Goal
-│   ├─ Skip Goal
-│   └─ Back to Step 2
-└─ "Save & Review" button (khi hoàn thành tất cả goals)
-    ↓
-[Click Save & Review]
-    ↓
-=== STEP 4: Review ===
-[Create Report - Step 4]
-├─ Display sections:
-│   ├─ Session Summary (date, duration, rating)
-│   ├─ Goals Progress Table
-│   ├─ General Notes (textarea)
-│   └─ Recommendations (textarea)
-├─ Statistics:
-│   ├─ Total goals: X
-│   ├─ Avg progress change: +Y%
-│   └─ Goals completed: Z
-├─ Edit buttons per section → Navigate back to respective step
-└─ Final actions:
-    ├─ Save as Draft → Supabase INSERT reports (status: 'draft')
-    └─ Submit Report → Supabase INSERT reports (status: 'submitted')
-        ↓
-[Gọi Supabase Transaction:]
-    1. INSERT INTO reports (...)
-    2. INSERT INTO report_goals (...) for each goal
-    3. UPDATE student_goals SET current_progress = ...
-    4. INSERT INTO notifications (...) cho phụ huynh
-    ↓
-├─ Success:
-│   1. Show success toast
-│   2. Nếu status = 'submitted':
-│      - Supabase trigger gửi notifications
-│      - Realtime update cho phụ huynh
-│   3. Navigate to Report Detail
-└─ Error:
-    Hiển thị error message
+```mermaid
+flowchart TD
+    Start([Dashboard/Students/Reports]) --> CreateReport[Chọn Create Report]
+    CreateReport --> SelectStu{Đã chọn học sinh?}
+    SelectStu -->|Chưa| ChooseStudent[Chọn học sinh]
+    SelectStu -->|Rồi| Step1
+    ChooseStudent --> Step1
+
+    Step1[STEP 1: Basic Information<br/>- Session Date<br/>- Duration 60min<br/>- Rating 1-5 stars<br/>- Participation Level]
+    Step1 --> Validate1{Valid?}
+    Validate1 -->|No| Step1
+    Validate1 -->|Yes| Next1[Click Next]
+
+    Next1 --> LoadGoals[Supabase SELECT<br/>student_goals WHERE<br/>student_id AND status=active]
+    LoadGoals --> Step2[STEP 2: Select Goals<br/>- Goals grouped by domain<br/>- Checkbox each goal<br/>- Select All per domain]
+
+    Step2 --> Validate2{Chọn ≥ 1 goal?}
+    Validate2 -->|No| Step2
+    Validate2 -->|Yes| Next2[Click Next]
+
+    Next2 --> Step3[STEP 3: Record Progress<br/>Swipeable cards - 1 goal/card]
+    Step3 --> GoalCard[Goal Card:<br/>- Progress slider 0-100%<br/>- Support Level<br/>- Observations<br/>- Notes]
+    GoalCard --> AutoSave[Auto-save draft on blur]
+
+    GoalCard --> Nav{Navigation}
+    Nav -->|Previous Goal| Step3
+    Nav -->|Next Goal| Step3
+    Nav -->|Skip Goal| Step3
+    Nav -->|Back to Step 2| Step2
+    Nav -->|All Complete| Review[Click Save & Review]
+
+    Review --> Step4[STEP 4: Review<br/>- Session Summary<br/>- Goals Progress Table<br/>- General Notes<br/>- Recommendations]
+
+    Step4 --> EditSection{Edit Section?}
+    EditSection -->|Yes - Edit Step 1| Step1
+    EditSection -->|Yes - Edit Goals| Step3
+    EditSection -->|No| FinalAction{Final Action}
+
+    FinalAction -->|Save Draft| SaveDraft[INSERT reports<br/>status=draft]
+    FinalAction -->|Submit| SubmitReport[Supabase Transaction:<br/>1. INSERT reports<br/>2. INSERT report_goals<br/>3. UPDATE student_goals<br/>4. INSERT notifications]
+
+    SaveDraft --> DBResult{Result}
+    SubmitReport --> DBResult
+
+    DBResult -->|Success| Success[1. Success toast<br/>2. Trigger notifications<br/>3. Realtime update<br/>4. Navigate to Report Detail]
+    DBResult -->|Error| Error[Hiển thị error message]
+
+    Error --> Step4
+    Success --> End([Report Detail])
+
+    style Start fill:#e1f5ff
+    style Step1 fill:#fff9c4
+    style Step2 fill:#fff9c4
+    style Step3 fill:#fff9c4
+    style Step4 fill:#fff9c4
+    style Success fill:#c8e6c9
+    style Error fill:#ffcdd2
 ```
 
 ---
 
 ### 👨‍👩‍👧 Luồng Phụ Huynh Xem Báo Cáo
 
-```
-[Parent App Launch]
-    ↓
-[Check Supabase Session]
-    ↓
-├─ Có session → [Parent Dashboard]
-└─ Không có → [Parent Login Screen]
-    ↓
-[Parent Login]
-├─ Input: Email + Password
-├─ Gọi supabase.auth.signInWithPassword()
-└─ Success → Session tự động lưu → Navigate to Dashboard
-    ↓
-[Parent Dashboard Screen]
-├─ Hiển thị:
-│   ├─ Welcome message
-│   ├─ Quick stats (children, reports, notifications)
-│   ├─ Recent reports (với unread badges)
-│   ├─ Recent achievements
-│   └─ Quick actions
-├─ Pull to refresh
-└─ Navigation options:
-    ├─ View All Children → [Children List]
-    ├─ View All Reports → [All Reports]
-    ├─ Notifications (với badge) → [Notifications Screen]
-    └─ Profile → [Parent Profile]
-        ↓
-[Children List Screen]
-├─ Hiển thị danh sách con
-├─ Mỗi child card:
-│   ├─ Avatar, name, age
-│   ├─ Teacher info
-│   ├─ Stats (goals, reports, avg rating)
-│   └─ Unread reports badge
-└─ Click child → Navigate to Child Detail
-    ↓
-[Child Detail Screen]
-├─ Tabs:
-│   ├─ Overview
-│   │   ├─ Basic info
-│   │   ├─ Teacher contact
-│   │   └─ Summary stats
-│   ├─ Goals
-│   │   ├─ Active goals list
-│   │   ├─ Progress bars
-│   │   └─ Click goal → Goal Detail Modal
-│   ├─ Reports
-│   │   ├─ Reports list
-│   │   └─ Click report → Navigate to Report Detail
-│   └─ Progress
-│       ├─ Charts
-│       └─ Timeline
-└─ Actions: Call teacher, Message teacher
-    ↓
-[Report Detail Screen (Parent View)]
-├─ Auto INSERT into report_views (via Supabase)
-├─ Subscribe to realtime changes
-├─ Display sections:
-│   ├─ Header (student, date, rating, teacher)
-│   ├─ Session info card
-│   ├─ Goals progress table (grouped by domain)
-│   │   └─ Click goal → Expand observations
-│   ├─ Teacher's notes
-│   └─ Recommendations
-├─ Summary stats
-└─ Actions:
-    ├─ Export PDF → Generate + Download (Supabase Storage)
-    ├─ Share → WhatsApp/Email/etc
-    └─ Print
-        ↓
-[Notifications Screen]
-├─ Tabs: All / Unread
-├─ Realtime subscription: supabase.channel('notifications').on('INSERT')
-├─ List notifications:
-│   ├─ Icon by type
-│   ├─ Title + message
-│   ├─ Timestamp
-│   └─ Unread indicator
-├─ Click notification:
-│   1. UPDATE notifications SET is_read = true
-│   2. Navigate to related entity
-└─ Actions:
-    ├─ Swipe: Mark read/Delete (Supabase UPDATE/DELETE)
-    └─ Bulk: Mark all as read (Supabase batch UPDATE)
+```mermaid
+flowchart TD
+    Start([Parent App Launch]) --> CheckSession{Check Supabase Session}
+
+    CheckSession -->|Có session| ParentDash[Parent Dashboard]
+    CheckSession -->|Không có| ParentLogin[Parent Login Screen]
+
+    ParentLogin --> InputCreds[Input: Email + Password]
+    InputCreds --> CallAuth[supabase.auth.signInWithPassword]
+    CallAuth --> AuthResult{Result}
+    AuthResult -->|Success| ParentDash
+    AuthResult -->|Error| ParentLogin
+
+    ParentDash --> ShowDash[Hiển thị:<br/>- Welcome message<br/>- Quick stats<br/>- Recent reports unread<br/>- Achievements<br/>- Quick actions]
+    ShowDash --> DashAction{Navigation}
+
+    DashAction -->|View All Children| ChildrenList[Children List Screen]
+    DashAction -->|View All Reports| AllReports[All Reports List]
+    DashAction -->|Notifications| NotifScreen[Notifications Screen]
+    DashAction -->|Profile| ParentProfile[Parent Profile]
+
+    ChildrenList --> ShowChildren[Hiển thị danh sách con<br/>- Avatar, name, age<br/>- Teacher info<br/>- Stats goals/reports<br/>- Unread badge]
+    ShowChildren --> ClickChild[Click child]
+    ClickChild --> ChildDetail[Child Detail Screen]
+
+    ChildDetail --> Tabs{Choose Tab}
+    Tabs -->|Overview| TabOverview[Basic info<br/>Teacher contact<br/>Summary stats]
+    Tabs -->|Goals| TabGoals[Active goals list<br/>Progress bars<br/>Click → Goal Detail]
+    Tabs -->|Reports| TabReports[Reports list<br/>Click → Report Detail]
+    Tabs -->|Progress| TabProgress[Charts<br/>Timeline]
+
+    TabReports --> ClickReport[Click report]
+    AllReports --> ClickReport
+
+    ClickReport --> ReportDetail[Report Detail Screen]
+    ReportDetail --> RecordView[AUTO: INSERT into<br/>report_views table]
+    RecordView --> Subscribe[Subscribe to<br/>realtime changes]
+
+    Subscribe --> ShowReport[Display:<br/>- Header student/date/rating<br/>- Session info card<br/>- Goals progress table<br/>- Teacher notes<br/>- Recommendations<br/>- Summary stats]
+
+    ShowReport --> ReportAction{Actions}
+    ReportAction -->|Export PDF| ExportPDF[Generate + Download<br/>from Supabase Storage]
+    ReportAction -->|Share| Share[WhatsApp/Email/etc]
+    ReportAction -->|Print| Print[Print report]
+
+    NotifScreen --> ShowNotif[Tabs: All / Unread<br/>Realtime subscription<br/>channel notifications]
+    ShowNotif --> NotifList[List notifications:<br/>- Icon by type<br/>- Title + message<br/>- Timestamp<br/>- Unread indicator]
+
+    NotifList --> ClickNotif{Click notification}
+    ClickNotif --> MarkRead[UPDATE notifications<br/>SET is_read = true]
+    MarkRead --> Navigate[Navigate to<br/>related entity]
+
+    NotifList --> SwipeAction{Swipe Actions}
+    SwipeAction -->|Mark read| UpdateRead[Supabase UPDATE]
+    SwipeAction -->|Delete| DeleteNotif[Supabase DELETE]
+    SwipeAction -->|Bulk: Mark all| BatchUpdate[Supabase batch UPDATE]
+
+    style Start fill:#e1f5ff
+    style ParentDash fill:#f3e5f5
+    style ChildDetail fill:#fff9c4
+    style ReportDetail fill:#c8e6c9
+    style NotifScreen fill:#ffe0b2
 ```
 
 ---
