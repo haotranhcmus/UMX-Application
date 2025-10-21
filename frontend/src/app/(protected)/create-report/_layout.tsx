@@ -3,6 +3,7 @@ import { Stack, router } from "expo-router";
 import Icon from "@expo/vector-icons/AntDesign";
 import { Pressable } from "react-native";
 import { theme } from "@/theme";
+import { ROUTES } from "@/constants/routes";
 
 export default function CreateReportLayout() {
   return (
@@ -14,7 +15,7 @@ export default function CreateReportLayout() {
             <Pressable
               onPress={() => {
                 // Handle back navigation
-                router.back();
+                router.push(ROUTES.APP.HOME);
               }}
               style={{ marginHorizontal: 8 }}
             >

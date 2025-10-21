@@ -55,6 +55,7 @@ Thumbs.db
 .cache/
 
 docs_local/
+docs/
 
 
 # Expo specific
@@ -92,3 +93,90 @@ bun.lockb
 # app-example
 
 docs_local/
+
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# API Keys & Secrets
+secrets.json
+google-services.json      # Android Firebase config
+GoogleService-Info.plist  # iOS Firebase config
+
+# AWS Credentials
+.aws/
+
+# Private keys
+*.pem
+*.key
+*.p12
+*.mobileprovision
+
+.vscode/settings.json
+.vscode/launch.json
+*.code-workspace
+
+# JetBrains (WebStorm, IntelliJ)
+.idea/
+*.iml
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# Linux
+.directory
+*.log
+
+.metro-health-check*
+
+# Testing
+coverage/
+.nyc_output/
+junit.xml
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Build artifacts
+dist/
+build/
+out/
+
+# TypeScript
+*.tsbuildinfo
+
+bun.lock

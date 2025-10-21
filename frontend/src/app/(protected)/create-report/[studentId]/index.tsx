@@ -38,6 +38,18 @@ export default function CreateReportScreen() {
   const { domains, setDomains } = useDomain();
   const [isButtonDisabled, setIsButtonDisabled] = useState(false);
 
+  const isAnyGoalSelected = domains.some((domain) =>
+    domain.goals.some((goal) => goal.isSelected)
+  );
+
+  const handleSubmitReport = () => {
+    if (!isAnyGoalSelected) {
+      alert("Vui lòng chọn ít nhất một mục tiêu trước khi báo cáo.");
+      return;
+    }
+    router.push(`/create-report`);
+  };
+
   const handleExit = () => {
     router.replace(ROUTES.APP.HOME);
   };
@@ -233,10 +245,17 @@ export default function CreateReportScreen() {
         </View>
       </ScrollView>
       <GreenButton
-        title="Báo cáo kết quả của mục tiêu"
+        title={
+          isAnyGoalSelected
+            ? "Báo cáo kết quả của mục tiêu"
+            : "Chọn mục tiêu để báo cáo"
+        }
         onPress={() => {
-          setIsButtonDisabled(true);
-          router.push(`/create-report/${student.id}/select-domain-goals`);
+          if (isAnyGoalSelected === false) {
+            router.push(`/create-report/${student.id}/select-domain-goals`);
+            return;
+          }
+          handleSubmitReport();
         }}
         style={{ margin: theme.layout.spacing.lg }}
         disabled={isButtonDisabled}
