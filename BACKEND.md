@@ -1,28 +1,1752 @@
-# 📱 UMX - Luồng Hoạt Động & Thiết Kế Screens
+# �️ UMX Backend - Supabase Architecture
 
-**Dự án:** UMX - Student Intervention Management System  
+**Dự án:** UMX - Student Intervention Management System (ABA)  
+**Backend:** Supabase (PostgreSQL + Auth + Storage + Realtime)  
 **Ngày:** 21 tháng 10, 2025  
-**Mục đích:** Tài liệu chi tiết luồng hoạt động và thiết kế màn hình
+**Mục đích:** Tài liệu kiến trúc backend, database schema, API design
 
 ---
 
 ## 📋 Mục Lục
 
-1. [Luồng Tạo Mục Tiêu (Create Goal)](#1-luồng-tạo-mục-tiêu)
-2. [Luồng Tạo Báo Cáo (Create Report)](#2-luồng-tạo-báo-cáo)
-3. [Luồng Phụ Huynh Xem Báo Cáo](#3-luồng-phụ-huynh-xem-báo-cáo)
-4. [Chi Tiết Các Screens](#4-chi-tiết-các-screens)
-5. [Flowchart Text Format](#5-flowchart-text-format)
+1. [Tổng Quan Backend](#1-tổng-quan-backend)
+2. [Database Schema](#2-database-schema)
+3. [Authentication & Authorization](#3-authentication--authorization)
+4. [Supabase Service Functions](#4-supabase-service-functions)
+5. [Realtime Subscriptions](#5-realtime-subscriptions)
+6. [Storage Structure](#6-storage-structure)
+7. [Row Level Security (RLS)](#7-row-level-security-rls)
+8. [Edge Functions](#8-edge-functions)
+9. [Migration Scripts](#9-migration-scripts)
+10. [API Endpoints Summary](#10-api-endpoints-summary)
 
 ---
 
-## 1. Luồng Tạo Mục Tiêu (Create Goal)
+## 1. Tổng Quan Backend
 
-### 🎯 Mục đích
+### 🏗️ Kiến Trúc Tổng Thể
 
-Giáo viên gán mục tiêu (Goal) từ thư viện Goal Templates cho học sinh cụ thể.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     React Native App                         │
+│            (Expo Router + NativeWind)                        │
+└───────────────────────┬─────────────────────────────────────┘
+                        │
+                        │ HTTPS/WebSocket
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Supabase Platform                         │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ PostgreSQL   │  │   Auth       │  │   Storage    │      │
+│  │  Database    │  │   (GoTrue)   │  │   (S3-like)  │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │  Realtime    │  │ Edge         │  │    RLS       │      │
+│  │  (Broadcast) │  │ Functions    │  │  Policies    │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### 📊 Flowchart Mermaid
+### 📊 Tech Stack
+
+- **Database:** PostgreSQL 15+ (via Supabase)
+- **Authentication:** Supabase Auth (JWT tokens)
+- **File Storage:** Supabase Storage
+- **Realtime:** Supabase Realtime (PostgreSQL Change Data Capture)
+- **API Layer:** Supabase Auto-generated REST/GraphQL APIs
+- **Serverless Functions:** Supabase Edge Functions (Deno)
+
+### 🔑 Key Features
+
+1. **Row Level Security (RLS):** Mọi table đều có RLS policies
+2. **Realtime Updates:** Notifications, report updates realtime
+3. **Optimistic UI:** Client-side mutations với automatic revalidation
+4. **Type Safety:** Auto-generated TypeScript types từ database schema
+5. **File Upload:** Avatar, report attachments via Supabase Storage
+
+### 🌍 Environment Variables
+
+```bash
+# .env.local (Frontend)
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# Backend Edge Functions
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SMTP_HOST=smtp.gmail.com
+SMTP_USER=notifications@umx.app
+SMTP_PASS=your-smtp-password
+```
+
+---
+
+## 2. Database Schema
+
+### 📐 Entity Relationship Diagram
+
+```
+users (auth.users extended)
+  │
+  ├──< students (primary_teacher_id)
+  │     │
+  │     ├──< student_goals
+  │     │     │
+  │     │     └──> goal_templates
+  │     │           │
+  │     │           ├──> domains (7 ABA domains)
+  │     │           └──< goal_template_tags
+  │     │                 │
+  │     │                 └──> tags
+  │     │
+  │     ├──< reports
+  │     │     │
+  │     │     ├──< report_goals (junction: reports ↔ student_goals)
+  │     │     └──< report_views (tracking parent views)
+  │     │
+  │     └──< parent_students (junction: students ↔ parents)
+  │           │
+  │           └──> parents
+  │                 │
+  │                 └──< notifications
+  │
+  └──< activity_logs
+```
+
+### 🗃️ Core Tables
+
+#### 1. **users** (extends auth.users)
+
+**Purpose:** Giáo viên (Teachers), Admin accounts
+
+```sql
+CREATE TABLE public.users (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'teacher', 'supervisor')),
+  phone TEXT,
+  avatar_url TEXT,
+  is_active BOOLEAN DEFAULT true,
+  last_login_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_active ON users(is_active) WHERE is_active = true;
+
+-- RLS Policies
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- Users can read their own data
+CREATE POLICY "Users can view own profile"
+  ON users FOR SELECT
+  USING (auth.uid() = id);
+
+-- Users can update their own data (except role)
+CREATE POLICY "Users can update own profile"
+  ON users FOR UPDATE
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+```
+
+---
+
+#### 2. **domains** (7 ABA Intervention Domains)
+
+**Purpose:** 7 lĩnh vực can thiệp ABA chuẩn
+
+```sql
+CREATE TABLE public.domains (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL CHECK (code IN (
+    'IMITATION',
+    'RECEPTIVE_LANGUAGE',
+    'EXPRESSIVE_LANGUAGE',
+    'VISUAL_PERFORMANCE',
+    'PLAY_LEISURE',
+    'SOCIAL_SKILLS',
+    'SELF_HELP'
+  )),
+  name TEXT NOT NULL, -- Vietnamese name
+  name_en TEXT NOT NULL, -- English name
+  description TEXT,
+  icon TEXT NOT NULL, -- Emoji or icon name
+  color TEXT NOT NULL, -- Hex color code
+  order_index INTEGER NOT NULL UNIQUE,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_domains_active ON domains(is_active, order_index);
+
+-- RLS: Public read (all authenticated users)
+ALTER TABLE domains ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Domains are viewable by all authenticated users"
+  ON domains FOR SELECT
+  TO authenticated
+  USING (is_active = true);
+```
+
+**Seed Data:** See `DOMAINS_AND_GOALS_DATA.md`
+
+---
+
+#### 3. **goal_templates**
+
+**Purpose:** Thư viện mẫu mục tiêu (Goal Templates Library)
+
+```sql
+CREATE TABLE public.goal_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain_id UUID NOT NULL REFERENCES domains(id) ON DELETE RESTRICT,
+  description TEXT NOT NULL, -- English description
+  description_vi TEXT, -- Vietnamese translation
+  difficulty_level TEXT NOT NULL CHECK (difficulty_level IN ('easy', 'medium', 'hard')),
+  age_range_min INTEGER, -- months (e.g., 18 for 18 months old)
+  age_range_max INTEGER, -- months (e.g., 36 for 36 months old)
+  suggested_support_levels TEXT[], -- Array: ['verbal', 'modeling', 'physical']
+  order_index INTEGER NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  CONSTRAINT age_range_valid CHECK (
+    (age_range_min IS NULL AND age_range_max IS NULL) OR
+    (age_range_min < age_range_max)
+  )
+);
+
+-- Indexes
+CREATE INDEX idx_goal_templates_domain ON goal_templates(domain_id);
+CREATE INDEX idx_goal_templates_difficulty ON goal_templates(difficulty_level);
+CREATE INDEX idx_goal_templates_active ON goal_templates(is_active, domain_id, order_index);
+
+-- RLS: All authenticated users can read
+ALTER TABLE goal_templates ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Goal templates are viewable by authenticated users"
+  ON goal_templates FOR SELECT
+  TO authenticated
+  USING (is_active = true);
+
+-- Only admins can modify
+CREATE POLICY "Only admins can modify goal templates"
+  ON goal_templates FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+```
+
+---
+
+#### 4. **tags**
+
+**Purpose:** Tags để phân loại goal templates
+
+```sql
+CREATE TABLE public.tags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT UNIQUE NOT NULL,
+  category TEXT NOT NULL CHECK (category IN (
+    'imitation', 'receptive', 'expressive', 'visual',
+    'play', 'social', 'self_help', 'motor', 'support', 'age'
+  )),
+  description TEXT,
+  color TEXT, -- Hex color for UI
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS
+ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Tags are viewable by all authenticated users"
+  ON tags FOR SELECT
+  TO authenticated
+  USING (true);
+```
+
+---
+
+#### 5. **goal_template_tags** (Junction Table)
+
+**Purpose:** Many-to-many relationship: goal_templates ↔ tags
+
+```sql
+CREATE TABLE public.goal_template_tags (
+  goal_template_id UUID NOT NULL REFERENCES goal_templates(id) ON DELETE CASCADE,
+  tag_id UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  PRIMARY KEY (goal_template_id, tag_id)
+);
+
+-- Indexes
+CREATE INDEX idx_gtt_template ON goal_template_tags(goal_template_id);
+CREATE INDEX idx_gtt_tag ON goal_template_tags(tag_id);
+
+-- RLS
+ALTER TABLE goal_template_tags ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Goal template tags are viewable by authenticated users"
+  ON goal_template_tags FOR SELECT
+  TO authenticated
+  USING (true);
+```
+
+---
+
+#### 6. **students**
+
+**Purpose:** Thông tin học sinh
+
+```sql
+CREATE TABLE public.students (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_code TEXT UNIQUE NOT NULL,
+  full_name TEXT NOT NULL,
+  date_of_birth DATE NOT NULL,
+  gender TEXT CHECK (gender IN ('male', 'female', 'other')),
+  avatar_url TEXT,
+  primary_teacher_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'graduated')),
+  enrollment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  medical_notes TEXT,
+  special_needs TEXT,
+  parent_can_view_medical_notes BOOLEAN DEFAULT false,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  CONSTRAINT dob_not_future CHECK (date_of_birth <= CURRENT_DATE)
+);
+
+-- Indexes
+CREATE INDEX idx_students_teacher ON students(primary_teacher_id);
+CREATE INDEX idx_students_status ON students(status) WHERE status = 'active';
+CREATE INDEX idx_students_code ON students(student_code);
+
+-- Full-text search
+CREATE INDEX idx_students_name_search ON students USING gin(to_tsvector('english', full_name));
+
+-- RLS
+ALTER TABLE students ENABLE ROW LEVEL SECURITY;
+
+-- Teachers can view their assigned students
+CREATE POLICY "Teachers can view their students"
+  ON students FOR SELECT
+  TO authenticated
+  USING (
+    primary_teacher_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM student_teachers st
+      WHERE st.student_id = students.id AND st.teacher_id = auth.uid()
+    )
+  );
+
+-- Teachers can update their assigned students
+CREATE POLICY "Teachers can update their students"
+  ON students FOR UPDATE
+  TO authenticated
+  USING (
+    primary_teacher_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM student_teachers st
+      WHERE st.student_id = students.id AND st.teacher_id = auth.uid()
+    )
+  );
+```
+
+---
+
+#### 7. **student_teachers** (Junction Table)
+
+**Purpose:** Many-to-many: students ↔ teachers (support teachers)
+
+```sql
+CREATE TABLE public.student_teachers (
+  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  assigned_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  is_active BOOLEAN DEFAULT true,
+
+  PRIMARY KEY (student_id, teacher_id)
+);
+
+-- RLS
+ALTER TABLE student_teachers ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Teachers can view their assignments"
+  ON student_teachers FOR SELECT
+  TO authenticated
+  USING (teacher_id = auth.uid());
+```
+
+---
+
+#### 8. **student_goals**
+
+**Purpose:** Goals được gán cho học sinh cụ thể
+
+```sql
+CREATE TABLE public.student_goals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  goal_template_id UUID NOT NULL REFERENCES goal_templates(id) ON DELETE RESTRICT,
+
+  -- Progress tracking
+  target_progress INTEGER NOT NULL DEFAULT 100 CHECK (target_progress BETWEEN 50 AND 100),
+  current_progress INTEGER NOT NULL DEFAULT 0 CHECK (current_progress BETWEEN 0 AND 100),
+
+  -- Status
+  status TEXT NOT NULL DEFAULT 'not_started' CHECK (status IN (
+    'not_started',
+    'in_progress',
+    'completed',
+    'on_hold',
+    'discontinued'
+  )),
+
+  -- Timeline
+  start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  target_end_date DATE,
+  actual_end_date DATE,
+
+  -- Notes
+  notes TEXT,
+
+  -- Metadata
+  created_by UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  CONSTRAINT target_date_after_start CHECK (
+    target_end_date IS NULL OR target_end_date >= start_date
+  ),
+  CONSTRAINT actual_end_after_start CHECK (
+    actual_end_date IS NULL OR actual_end_date >= start_date
+  )
+);
+
+-- Indexes
+CREATE INDEX idx_student_goals_student ON student_goals(student_id, status);
+CREATE INDEX idx_student_goals_template ON student_goals(goal_template_id);
+CREATE INDEX idx_student_goals_status ON student_goals(status);
+
+-- RLS
+ALTER TABLE student_goals ENABLE ROW LEVEL SECURITY;
+
+-- Teachers can view goals for their students
+CREATE POLICY "Teachers can view student goals"
+  ON student_goals FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM students s
+      WHERE s.id = student_goals.student_id
+        AND (s.primary_teacher_id = auth.uid() OR
+             EXISTS (SELECT 1 FROM student_teachers st
+                     WHERE st.student_id = s.id AND st.teacher_id = auth.uid()))
+    )
+  );
+
+-- Teachers can insert goals for their students
+CREATE POLICY "Teachers can create student goals"
+  ON student_goals FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    created_by = auth.uid() AND
+    EXISTS (
+      SELECT 1 FROM students s
+      WHERE s.id = student_goals.student_id
+        AND (s.primary_teacher_id = auth.uid() OR
+             EXISTS (SELECT 1 FROM student_teachers st
+                     WHERE st.student_id = s.id AND st.teacher_id = auth.uid()))
+    )
+  );
+
+-- Teachers can update goals they created
+CREATE POLICY "Teachers can update student goals"
+  ON student_goals FOR UPDATE
+  TO authenticated
+  USING (created_by = auth.uid());
+```
+
+---
+
+#### 9. **reports**
+
+**Purpose:** Báo cáo tiến độ buổi học
+
+```sql
+CREATE TABLE public.reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+
+  -- Session info
+  session_date DATE NOT NULL,
+  session_duration INTEGER NOT NULL CHECK (session_duration > 0), -- minutes
+  rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  participation_level TEXT NOT NULL CHECK (participation_level IN ('high', 'medium', 'low')),
+
+  -- Notes
+  notes TEXT,
+  recommendations TEXT,
+
+  -- Status
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'submitted', 'reviewed')),
+  visible_to_parents BOOLEAN NOT NULL DEFAULT true,
+
+  -- Review (optional - by supervisor)
+  reviewed_by UUID REFERENCES users(id),
+  reviewed_at TIMESTAMPTZ,
+  review_notes TEXT,
+
+  -- Metadata
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  CONSTRAINT session_date_not_future CHECK (session_date <= CURRENT_DATE)
+);
+
+-- Indexes
+CREATE INDEX idx_reports_student ON reports(student_id, session_date DESC);
+CREATE INDEX idx_reports_teacher ON reports(teacher_id, session_date DESC);
+CREATE INDEX idx_reports_status ON reports(status, session_date DESC);
+CREATE INDEX idx_reports_date ON reports(session_date DESC);
+
+-- RLS
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+
+-- Teachers can view reports for their students
+CREATE POLICY "Teachers can view reports"
+  ON reports FOR SELECT
+  TO authenticated
+  USING (
+    teacher_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM students s
+      WHERE s.id = reports.student_id
+        AND (s.primary_teacher_id = auth.uid() OR
+             EXISTS (SELECT 1 FROM student_teachers st
+                     WHERE st.student_id = s.id AND st.teacher_id = auth.uid()))
+    )
+  );
+
+-- Teachers can create reports for their students
+CREATE POLICY "Teachers can create reports"
+  ON reports FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    teacher_id = auth.uid() AND
+    EXISTS (
+      SELECT 1 FROM students s
+      WHERE s.id = reports.student_id
+        AND (s.primary_teacher_id = auth.uid() OR
+             EXISTS (SELECT 1 FROM student_teachers st
+                     WHERE st.student_id = s.id AND st.teacher_id = auth.uid()))
+    )
+  );
+
+-- Teachers can update their own reports
+CREATE POLICY "Teachers can update own reports"
+  ON reports FOR UPDATE
+  TO authenticated
+  USING (teacher_id = auth.uid());
+```
+
+---
+
+#### 10. **report_goals** (Junction Table + Data)
+
+**Purpose:** Goals recorded trong mỗi report
+
+```sql
+CREATE TABLE public.report_goals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  report_id UUID NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+  student_goal_id UUID NOT NULL REFERENCES student_goals(id) ON DELETE RESTRICT,
+
+  -- Progress data
+  progress_recorded INTEGER NOT NULL CHECK (progress_recorded BETWEEN 0 AND 100),
+  previous_progress INTEGER NOT NULL CHECK (previous_progress BETWEEN 0 AND 100),
+
+  -- Support level used
+  support_level TEXT NOT NULL CHECK (support_level IN (
+    'independent',
+    'verbal',
+    'modeling',
+    'physical',
+    'full_physical'
+  )),
+
+  -- Observations
+  observations TEXT,
+  notes TEXT,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE (report_id, student_goal_id)
+);
+
+-- Indexes
+CREATE INDEX idx_report_goals_report ON report_goals(report_id);
+CREATE INDEX idx_report_goals_student_goal ON report_goals(student_goal_id);
+
+-- RLS
+ALTER TABLE report_goals ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view report goals through reports"
+  ON report_goals FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM reports r
+      WHERE r.id = report_goals.report_id
+        AND (
+          r.teacher_id = auth.uid() OR
+          EXISTS (
+            SELECT 1 FROM students s
+            WHERE s.id = r.student_id
+              AND (s.primary_teacher_id = auth.uid() OR
+                   EXISTS (SELECT 1 FROM student_teachers st
+                           WHERE st.student_id = s.id AND st.teacher_id = auth.uid()))
+          )
+        )
+    )
+  );
+```
+
+---
+
+#### 11. **parents**
+
+**Purpose:** Tài khoản phụ huynh
+
+```sql
+CREATE TABLE public.parents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL, -- Hashed via Supabase Auth or custom
+  full_name TEXT NOT NULL,
+  phone TEXT,
+  relationship TEXT CHECK (relationship IN ('mother', 'father', 'guardian', 'other')),
+  avatar_url TEXT,
+  is_active BOOLEAN DEFAULT true,
+  last_login_at TIMESTAMPTZ,
+  failed_login_attempts INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_parents_email ON parents(email) WHERE is_active = true;
+
+-- RLS
+ALTER TABLE parents ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Parents can view own profile"
+  ON parents FOR SELECT
+  USING (
+    id = (current_setting('app.parent_id', true))::uuid OR
+    email = auth.jwt() ->> 'email'
+  );
+
+CREATE POLICY "Parents can update own profile"
+  ON parents FOR UPDATE
+  USING (
+    id = (current_setting('app.parent_id', true))::uuid
+  );
+```
+
+---
+
+#### 12. **parent_students** (Junction Table)
+
+**Purpose:** Many-to-many: parents ↔ students
+
+```sql
+CREATE TABLE public.parent_students (
+  parent_id UUID NOT NULL REFERENCES parents(id) ON DELETE CASCADE,
+  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  relationship TEXT NOT NULL, -- 'mother', 'father', 'guardian'
+  is_primary BOOLEAN DEFAULT false, -- Primary contact parent
+  can_receive_notifications BOOLEAN DEFAULT true,
+  can_view_reports BOOLEAN DEFAULT true,
+  assigned_date DATE DEFAULT CURRENT_DATE,
+
+  PRIMARY KEY (parent_id, student_id)
+);
+
+-- Indexes
+CREATE INDEX idx_parent_students_parent ON parent_students(parent_id);
+CREATE INDEX idx_parent_students_student ON parent_students(student_id);
+
+-- RLS
+ALTER TABLE parent_students ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Parents can view their children"
+  ON parent_students FOR SELECT
+  USING (
+    parent_id = (current_setting('app.parent_id', true))::uuid
+  );
+```
+
+---
+
+#### 13. **report_views**
+
+**Purpose:** Tracking khi phụ huynh xem report
+
+```sql
+CREATE TABLE public.report_views (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  report_id UUID NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+  parent_id UUID NOT NULL REFERENCES parents(id) ON DELETE CASCADE,
+  viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  view_duration_seconds INTEGER DEFAULT 0,
+  device_type TEXT, -- 'ios', 'android', 'web'
+
+  UNIQUE (report_id, parent_id)
+);
+
+-- Indexes
+CREATE INDEX idx_report_views_report ON report_views(report_id);
+CREATE INDEX idx_report_views_parent ON report_views(parent_id, viewed_at DESC);
+
+-- RLS
+ALTER TABLE report_views ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Parents can view their own report views"
+  ON report_views FOR SELECT
+  USING (
+    parent_id = (current_setting('app.parent_id', true))::uuid
+  );
+
+CREATE POLICY "Parents can insert their report views"
+  ON report_views FOR INSERT
+  WITH CHECK (
+    parent_id = (current_setting('app.parent_id', true))::uuid
+  );
+```
+
+---
+
+#### 14. **notifications**
+
+**Purpose:** Thông báo cho phụ huynh
+
+```sql
+CREATE TABLE public.notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  parent_id UUID NOT NULL REFERENCES parents(id) ON DELETE CASCADE,
+  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+
+  -- Notification content
+  type TEXT NOT NULL CHECK (type IN (
+    'new_report',
+    'goal_completed',
+    'announcement',
+    'schedule_change',
+    'reminder'
+  )),
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+
+  -- Related entity
+  related_entity_type TEXT CHECK (related_entity_type IN ('report', 'goal', 'announcement')),
+  related_entity_id UUID,
+
+  -- Status
+  is_read BOOLEAN DEFAULT false,
+  read_at TIMESTAMPTZ,
+
+  -- Channels
+  channels JSONB DEFAULT '{"email": true, "push": true}'::jsonb,
+  sent_via_email BOOLEAN DEFAULT false,
+  sent_via_push BOOLEAN DEFAULT false,
+
+  -- Priority
+  priority TEXT DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+
+  -- Metadata
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_notifications_parent ON notifications(parent_id, is_read, created_at DESC);
+CREATE INDEX idx_notifications_unread ON notifications(parent_id) WHERE is_read = false;
+CREATE INDEX idx_notifications_type ON notifications(type, created_at DESC);
+
+-- RLS
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Parents can view their notifications"
+  ON notifications FOR SELECT
+  USING (
+    parent_id = (current_setting('app.parent_id', true))::uuid
+  );
+
+CREATE POLICY "Parents can update their notifications"
+  ON notifications FOR UPDATE
+  USING (
+    parent_id = (current_setting('app.parent_id', true))::uuid
+  );
+```
+
+---
+
+#### 15. **activity_logs**
+
+**Purpose:** Audit trail cho tất cả actions
+
+```sql
+CREATE TABLE public.activity_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  action TEXT NOT NULL CHECK (action IN ('create', 'update', 'delete', 'login', 'logout')),
+  entity_type TEXT NOT NULL, -- 'student', 'goal', 'report', etc.
+  entity_id UUID,
+  old_values JSONB,
+  new_values JSONB,
+  ip_address INET,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_activity_logs_user ON activity_logs(user_id, created_at DESC);
+CREATE INDEX idx_activity_logs_entity ON activity_logs(entity_type, entity_id, created_at DESC);
+CREATE INDEX idx_activity_logs_date ON activity_logs(created_at DESC);
+
+-- RLS
+ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
+
+-- Only admins can view activity logs
+CREATE POLICY "Only admins can view activity logs"
+  ON activity_logs FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+```
+
+---
+
+### 📊 Database Relationships Summary
+
+```
+Domains (7 fixed)
+  └──< Goal Templates (~200)
+        └──< Student Goals (per student)
+              └──< Report Goals (per report)
+
+Students
+  ├──< Student Goals
+  ├──< Reports
+  │     └──< Report Goals
+  └──< Parent-Student (junction)
+        └──> Parents
+              └──< Notifications
+```
+
+---
+
+## 3. Authentication & Authorization
+
+### 🔐 Authentication Flow
+
+#### Teacher/Admin Auth (Supabase Auth)
+
+```typescript
+// services/auth.service.ts
+import { supabase } from "./supabase";
+
+export const authService = {
+  // Login
+  async signIn(email: string, password: string) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) throw error;
+
+    // Update last_login_at
+    await supabase
+      .from("users")
+      .update({ last_login_at: new Date().toISOString() })
+      .eq("id", data.user.id);
+
+    return data;
+  },
+
+  // Logout
+  async signOut() {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  },
+
+  // Get current session
+  async getSession() {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    if (error) throw error;
+    return session;
+  },
+
+  // Listen to auth changes
+  onAuthStateChange(callback: (session: Session | null) => void) {
+    return supabase.auth.onAuthStateChange((event, session) => {
+      callback(session);
+    });
+  },
+};
+```
+
+#### Parent Auth (Custom with JWT)
+
+```typescript
+// services/parent-auth.service.ts
+export const parentAuthService = {
+  async login(email: string, password: string) {
+    // Call Edge Function để verify
+    const { data, error } = await supabase.functions.invoke("parent-auth", {
+      body: { action: "login", email, password },
+    });
+
+    if (error) throw error;
+
+    // Store JWT token
+    await AsyncStorage.setItem("parent_token", data.token);
+    await AsyncStorage.setItem("parent_id", data.parent.id);
+
+    return data;
+  },
+
+  async logout() {
+    await AsyncStorage.removeItem("parent_token");
+    await AsyncStorage.removeItem("parent_id");
+  },
+
+  async getToken() {
+    return await AsyncStorage.getItem("parent_token");
+  },
+};
+```
+
+### 🛡️ Authorization Levels
+
+| Role           | Permissions                                                                 |
+| -------------- | --------------------------------------------------------------------------- |
+| **Admin**      | Full access: CRUD all tables, manage users, view all students/reports       |
+| **Teacher**    | CRUD own students, create/update reports, view templates, limited analytics |
+| **Supervisor** | View all, add review notes to reports, analytics                            |
+| **Parent**     | View own children data, reports (visible_to_parents=true), goals progress   |
+
+### 🔒 Row Level Security (RLS) Pattern
+
+**Example: students table**
+
+```sql
+-- Enable RLS
+ALTER TABLE students ENABLE ROW LEVEL SECURITY;
+
+-- Policy 1: Teachers can SELECT their students
+CREATE POLICY "teachers_select_students" ON students
+  FOR SELECT
+  TO authenticated
+  USING (
+    primary_teacher_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM student_teachers st
+      WHERE st.student_id = students.id AND st.teacher_id = auth.uid()
+    )
+  );
+
+-- Policy 2: Teachers can UPDATE their students
+CREATE POLICY "teachers_update_students" ON students
+  FOR UPDATE
+  TO authenticated
+  USING (
+    primary_teacher_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM student_teachers st
+      WHERE st.student_id = students.id AND st.teacher_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    primary_teacher_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM student_teachers st
+      WHERE st.student_id = students.id AND st.teacher_id = auth.uid()
+    )
+  );
+
+-- Policy 3: Only admins can INSERT students
+CREATE POLICY "admins_insert_students" ON students
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+```
+
+---
+
+## 4. Supabase Service Functions
+
+### 📦 Domain Service
+
+```typescript
+// services/domain.service.ts
+import { supabase } from "./supabase";
+import type { Database } from "../types/database.types";
+
+type Domain = Database["public"]["Tables"]["domains"]["Row"];
+
+export const domainService = {
+  // Fetch all active domains
+  async fetchDomains(): Promise<Domain[]> {
+    const { data, error } = await supabase
+      .from("domains")
+      .select("*")
+      .eq("is_active", true)
+      .order("order_index");
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Fetch domain with goal templates count
+  async fetchDomainWithTemplatesCount(domainId: string) {
+    const { data, error } = await supabase
+      .from("domains")
+      .select(
+        `
+        *,
+        goal_templates(count)
+      `
+      )
+      .eq("id", domainId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Fetch all domains with templates count
+  async fetchDomainsWithStats() {
+    const { data, error } = await supabase
+      .from("domains")
+      .select(
+        `
+        *,
+        goal_templates!inner(id, difficulty_level)
+      `
+      )
+      .eq("is_active", true)
+      .order("order_index");
+
+    if (error) throw error;
+
+    // Group templates by domain
+    const domainsWithStats = data.reduce((acc, domain) => {
+      const existingDomain = acc.find((d) => d.id === domain.id);
+
+      if (!existingDomain) {
+        acc.push({
+          ...domain,
+          templates_count: domain.goal_templates?.length || 0,
+          easy_count:
+            domain.goal_templates?.filter((t) => t.difficulty_level === "easy")
+              .length || 0,
+          medium_count:
+            domain.goal_templates?.filter(
+              (t) => t.difficulty_level === "medium"
+            ).length || 0,
+          hard_count:
+            domain.goal_templates?.filter((t) => t.difficulty_level === "hard")
+              .length || 0,
+        });
+      }
+
+      return acc;
+    }, []);
+
+    return domainsWithStats;
+  },
+};
+```
+
+---
+
+### 📚 Goal Template Service
+
+```typescript
+// services/goal-template.service.ts
+export const goalTemplateService = {
+  // Fetch templates by domain
+  async fetchTemplatesByDomain(
+    domainId: string,
+    options?: {
+      difficulty?: "easy" | "medium" | "hard";
+      searchQuery?: string;
+      excludeAssigned?: boolean;
+      studentId?: string;
+    }
+  ) {
+    let query = supabase
+      .from("goal_templates")
+      .select(
+        `
+        *,
+        domain:domains(id, name, color, icon),
+        goal_template_tags(
+          tag:tags(id, name, category, color)
+        )
+      `
+      )
+      .eq("domain_id", domainId)
+      .eq("is_active", true);
+
+    // Apply filters
+    if (options?.difficulty) {
+      query = query.eq("difficulty_level", options.difficulty);
+    }
+
+    if (options?.searchQuery) {
+      query = query.ilike("description", `%${options.searchQuery}%`);
+    }
+
+    query = query.order("order_index");
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Check if already assigned (if studentId provided)
+    if (options?.excludeAssigned && options?.studentId) {
+      const { data: assignedGoals } = await supabase
+        .from("student_goals")
+        .select("goal_template_id")
+        .eq("student_id", options.studentId)
+        .in("status", ["not_started", "in_progress"]);
+
+      const assignedIds = new Set(
+        assignedGoals?.map((g) => g.goal_template_id) || []
+      );
+
+      return data.map((template) => ({
+        ...template,
+        is_assigned: assignedIds.has(template.id),
+      }));
+    }
+
+    return data;
+  },
+
+  // Fetch single template with full details
+  async fetchTemplateDetails(templateId: string) {
+    const { data, error } = await supabase
+      .from("goal_templates")
+      .select(
+        `
+        *,
+        domain:domains(*),
+        goal_template_tags(
+          tag:tags(*)
+        )
+      `
+      )
+      .eq("id", templateId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+};
+```
+
+---
+
+### 👨‍🎓 Student Service
+
+```typescript
+// services/student.service.ts
+export const studentService = {
+  // Fetch students for current teacher
+  async fetchMyStudents(filters?: {
+    status?: "active" | "inactive" | "graduated";
+    searchQuery?: string;
+    sortBy?: "name" | "recent" | "rating";
+  }) {
+    let query = supabase.from("students").select(`
+        *,
+        primary_teacher:users!primary_teacher_id(id, full_name, avatar_url),
+        student_goals(id, status),
+        reports(id, rating, session_date)
+      `);
+
+    // Apply filters
+    if (filters?.status) {
+      query = query.eq("status", filters.status);
+    } else {
+      query = query.eq("status", "active");
+    }
+
+    if (filters?.searchQuery) {
+      query = query.or(
+        `full_name.ilike.%${filters.searchQuery}%,student_code.ilike.%${filters.searchQuery}%`
+      );
+    }
+
+    // Default sort by name
+    if (filters?.sortBy === "name") {
+      query = query.order("full_name");
+    } else if (filters?.sortBy === "recent") {
+      query = query.order("created_at", { ascending: false });
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Calculate stats
+    return data.map((student) => ({
+      ...student,
+      total_goals: student.student_goals?.length || 0,
+      active_goals:
+        student.student_goals?.filter((g) => g.status === "in_progress")
+          .length || 0,
+      total_reports: student.reports?.length || 0,
+      avg_rating:
+        student.reports?.length > 0
+          ? student.reports.reduce((sum, r) => sum + (r.rating || 0), 0) /
+            student.reports.length
+          : 0,
+    }));
+  },
+
+  // Fetch student detail
+  async fetchStudentDetail(studentId: string) {
+    const { data, error } = await supabase
+      .from("students")
+      .select(
+        `
+        *,
+        primary_teacher:users!primary_teacher_id(id, full_name, phone, email, avatar_url),
+        student_teachers(
+          teacher:users(id, full_name, avatar_url)
+        )
+      `
+      )
+      .eq("id", studentId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Create student
+  async createStudent(studentData: {
+    student_code: string;
+    full_name: string;
+    date_of_birth: string;
+    gender?: "male" | "female" | "other";
+    primary_teacher_id: string;
+    medical_notes?: string;
+    special_needs?: string;
+  }) {
+    const { data, error } = await supabase
+      .from("students")
+      .insert({
+        ...studentData,
+        created_by: (await supabase.auth.getUser()).data.user?.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Update student
+  async updateStudent(studentId: string, updates: Partial<Student>) {
+    const { data, error } = await supabase
+      .from("students")
+      .update(updates)
+      .eq("id", studentId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+};
+```
+
+---
+
+### 🎯 Student Goal Service
+
+```typescript
+// services/student-goal.service.ts
+export const studentGoalService = {
+  // Fetch goals for a student
+  async fetchStudentGoals(studentId: string, status?: string[]) {
+    let query = supabase
+      .from("student_goals")
+      .select(
+        `
+        *,
+        goal_template:goal_templates!inner(
+          id,
+          description,
+          description_vi,
+          difficulty_level,
+          domain:domains(id, name, name_en, icon, color, order_index)
+        ),
+        report_goals(
+          id,
+          progress_recorded,
+          created_at,
+          report:reports(session_date)
+        )
+      `
+      )
+      .eq("student_id", studentId);
+
+    if (status && status.length > 0) {
+      query = query.in("status", status);
+    }
+
+    query = query.order("start_date", { ascending: false });
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Calculate stats
+    return data.map((goal) => ({
+      ...goal,
+      times_practiced: goal.report_goals?.length || 0,
+      last_practiced: goal.report_goals?.[0]?.report?.session_date || null,
+      days_active: goal.start_date
+        ? Math.floor(
+            (Date.now() - new Date(goal.start_date).getTime()) /
+              (1000 * 60 * 60 * 24)
+          )
+        : 0,
+    }));
+  },
+
+  // Create student goal
+  async createStudentGoal(goalData: {
+    student_id: string;
+    goal_template_id: string;
+    target_progress?: number;
+    start_date?: string;
+    target_end_date?: string;
+    notes?: string;
+  }) {
+    const { data: user } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from("student_goals")
+      .insert({
+        ...goalData,
+        target_progress: goalData.target_progress || 100,
+        start_date:
+          goalData.start_date || new Date().toISOString().split("T")[0],
+        created_by: user.user?.id,
+      })
+      .select(
+        `
+        *,
+        goal_template:goal_templates(
+          *,
+          domain:domains(*)
+        )
+      `
+      )
+      .single();
+
+    if (error) throw error;
+
+    // Log activity
+    await supabase.from("activity_logs").insert({
+      user_id: user.user?.id,
+      action: "create",
+      entity_type: "student_goal",
+      entity_id: data.id,
+      new_values: data,
+    });
+
+    return data;
+  },
+
+  // Update goal progress (usually done via report)
+  async updateGoalProgress(goalId: string, newProgress: number) {
+    const { data: goal } = await supabase
+      .from("student_goals")
+      .select("target_progress, status")
+      .eq("id", goalId)
+      .single();
+
+    const newStatus =
+      newProgress >= (goal?.target_progress || 100)
+        ? "completed"
+        : newProgress > 0
+        ? "in_progress"
+        : "not_started";
+
+    const { data, error } = await supabase
+      .from("student_goals")
+      .update({
+        current_progress: newProgress,
+        status: newStatus,
+        actual_end_date:
+          newStatus === "completed"
+            ? new Date().toISOString().split("T")[0]
+            : null,
+      })
+      .eq("id", goalId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+};
+```
+
+---
+
+### 📝 Report Service
+
+```typescript
+// services/report.service.ts
+export const reportService = {
+  // Create report (multi-step transaction)
+  async createReport(reportData: {
+    student_id: string;
+    session_date: string;
+    session_duration: number;
+    rating: number;
+    participation_level: "high" | "medium" | "low";
+    notes?: string;
+    recommendations?: string;
+    visible_to_parents?: boolean;
+    status: "draft" | "submitted";
+    goals: Array<{
+      student_goal_id: string;
+      progress_recorded: number;
+      support_level: string;
+      observations?: string;
+      notes?: string;
+    }>;
+  }) {
+    const { data: user } = await supabase.auth.getUser();
+
+    // 1. Insert report
+    const { data: report, error: reportError } = await supabase
+      .from("reports")
+      .insert({
+        student_id: reportData.student_id,
+        teacher_id: user.user?.id,
+        session_date: reportData.session_date,
+        session_duration: reportData.session_duration,
+        rating: reportData.rating,
+        participation_level: reportData.participation_level,
+        notes: reportData.notes,
+        recommendations: reportData.recommendations,
+        visible_to_parents: reportData.visible_to_parents ?? true,
+        status: reportData.status,
+      })
+      .select()
+      .single();
+
+    if (reportError) throw reportError;
+
+    // 2. Insert report_goals and update student_goals
+    for (const goalData of reportData.goals) {
+      // Get previous progress
+      const { data: studentGoal } = await supabase
+        .from("student_goals")
+        .select("current_progress")
+        .eq("id", goalData.student_goal_id)
+        .single();
+
+      // Insert report_goal
+      await supabase.from("report_goals").insert({
+        report_id: report.id,
+        student_goal_id: goalData.student_goal_id,
+        progress_recorded: goalData.progress_recorded,
+        previous_progress: studentGoal?.current_progress || 0,
+        support_level: goalData.support_level,
+        observations: goalData.observations,
+        notes: goalData.notes,
+      });
+
+      // Update student_goal progress
+      await studentGoalService.updateGoalProgress(
+        goalData.student_goal_id,
+        goalData.progress_recorded
+      );
+    }
+
+    // 3. If submitted, send notifications to parents
+    if (reportData.status === "submitted") {
+      await notificationService.sendReportNotification(report.id);
+    }
+
+    // 4. Log activity
+    await supabase.from("activity_logs").insert({
+      user_id: user.user?.id,
+      action: "create",
+      entity_type: "report",
+      entity_id: report.id,
+      new_values: report,
+    });
+
+    return report;
+  },
+
+  // Fetch reports for student
+  async fetchStudentReports(
+    studentId: string,
+    filters?: {
+      from_date?: string;
+      to_date?: string;
+      status?: string;
+    }
+  ) {
+    let query = supabase
+      .from("reports")
+      .select(
+        `
+        *,
+        teacher:users!teacher_id(id, full_name, avatar_url),
+        report_goals(
+          id,
+          progress_recorded,
+          previous_progress,
+          student_goal:student_goals(
+            id,
+            goal_template:goal_templates(
+              description,
+              domain:domains(name, color, icon)
+            )
+          )
+        )
+      `
+      )
+      .eq("student_id", studentId);
+
+    if (filters?.from_date) {
+      query = query.gte("session_date", filters.from_date);
+    }
+
+    if (filters?.to_date) {
+      query = query.lte("session_date", filters.to_date);
+    }
+
+    if (filters?.status) {
+      query = query.eq("status", filters.status);
+    }
+
+    query = query.order("session_date", { ascending: false });
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return data.map((report) => ({
+      ...report,
+      goals_count: report.report_goals?.length || 0,
+      avg_progress_change:
+        report.report_goals?.length > 0
+          ? report.report_goals.reduce(
+              (sum, rg) => sum + (rg.progress_recorded - rg.previous_progress),
+              0
+            ) / report.report_goals.length
+          : 0,
+    }));
+  },
+
+  // Fetch report detail
+  async fetchReportDetail(reportId: string) {
+    const { data, error } = await supabase
+      .from("reports")
+      .select(
+        `
+        *,
+        student:students(id, full_name, student_code, avatar_url),
+        teacher:users!teacher_id(id, full_name, avatar_url),
+        report_goals(
+          *,
+          student_goal:student_goals(
+            id,
+            target_progress,
+            current_progress,
+            status,
+            goal_template:goal_templates(
+              id,
+              description,
+              description_vi,
+              domain:domains(id, name, name_en, icon, color, order_index)
+            )
+          )
+        ),
+        report_views(
+          *,
+          parent:parents(id, full_name, relationship)
+        )
+      `
+      )
+      .eq("id", reportId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+};
+```
+
+---
+
+### 🔔 Notification Service
+
+```typescript
+// services/notification.service.ts
+export const notificationService = {
+  // Send report notification to parents
+  async sendReportNotification(reportId: string) {
+    // Get report details
+    const { data: report } = await supabase
+      .from("reports")
+      .select(
+        `
+        *,
+        student:students(id, full_name)
+      `
+      )
+      .eq("id", reportId)
+      .single();
+
+    if (!report) return;
+
+    // Get all parents for this student
+    const { data: parentStudents } = await supabase
+      .from("parent_students")
+      .select("parent_id, parent:parents(id, full_name, email)")
+      .eq("student_id", report.student_id)
+      .eq("can_receive_notifications", true);
+
+    if (!parentStudents || parentStudents.length === 0) return;
+
+    // Create notifications
+    const notifications = parentStudents.map((ps) => ({
+      parent_id: ps.parent_id,
+      student_id: report.student_id,
+      type: "new_report",
+      title: "Báo cáo học tập mới",
+      message: `Báo cáo buổi học ngày ${report.session_date} đã được tạo cho ${report.student.full_name}`,
+      related_entity_type: "report",
+      related_entity_id: reportId,
+      channels: { email: true, push: true },
+      created_by: report.teacher_id,
+    }));
+
+    const { error } = await supabase
+      .from("notifications")
+      .insert(notifications);
+
+    if (error) throw error;
+
+    // Trigger Edge Function để gửi email
+    await supabase.functions.invoke("send-notification-email", {
+      body: {
+        reportId,
+        parentEmails: parentStudents.map((ps) => ps.parent.email),
+      },
+    });
+  },
+
+  // Fetch parent notifications
+  async fetchParentNotifications(parentId: string, unreadOnly = false) {
+    let query = supabase
+      .from("notifications")
+      .select(
+        `
+        *,
+        student:students(id, full_name, avatar_url)
+      `
+      )
+      .eq("parent_id", parentId);
+
+    if (unreadOnly) {
+      query = query.eq("is_read", false);
+    }
+
+    query = query.order("created_at", { ascending: false }).limit(50);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return data;
+  },
+
+  // Mark notification as read
+  async markAsRead(notificationId: string) {
+    const { error } = await supabase
+      .from("notifications")
+      .update({
+        is_read: true,
+        read_at: new Date().toISOString(),
+      })
+      .eq("id", notificationId);
+
+    if (error) throw error;
+  },
+
+  // Mark all as read
+  async markAllAsRead(parentId: string) {
+    const { error } = await supabase
+      .from("notifications")
+      .update({
+        is_read: true,
+        read_at: new Date().toISOString(),
+      })
+      .eq("parent_id", parentId)
+      .eq("is_read", false);
+
+    if (error) throw error;
+  },
+};
+```
+
+---
+
+## 5. Realtime Subscriptions
 
 ```mermaid
 flowchart TD

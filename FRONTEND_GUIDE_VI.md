@@ -530,29 +530,92 @@ flowchart TD
 
 #### 8. Select Domain Screen
 
-- **Route:** `/(protected)/goals/select-domain`
+- **Route:** `/(protected)/goals/select-domain?studentId=xxx`
+- **Mục đích:** Chọn 1 trong 7 lĩnh vực can thiệp (ABA domains)
 - **Layout:**
-  - Header: "Chọn Lĩnh Vực"
-  - Grid of DomainCard (2 columns)
+  - Header: "Chọn Lĩnh Vực" + Student name
+  - Grid of DomainCard (2 columns trên mobile, 3-4 trên tablet)
 - **DomainCard:**
-  - Large icon (colored)
-  - Domain name
-  - Description
-  - Templates count badge
+  - Large icon (emoji hoặc custom icon) với màu background theo domain
+  - Domain name (Tiếng Việt)
+  - Short description (1-2 dòng)
+  - Badge: Số lượng templates available (vd: "25 mục tiêu")
+  - Touch ripple effect
+- **7 Domains:**
+  1. 👤 **Bắt chước** (#FF6B6B) - Imitation
+  2. 👂 **Ngôn ngữ Receptive** (#4ECDC4) - Receptive Language
+  3. 💬 **Ngôn ngữ Expressive** (#45B7D1) - Expressive Language
+  4. 👁️ **Nhận thức thị giác** (#96CEB4) - Visual Performance
+  5. 🎮 **Chơi & Giải trí** (#FFEAA7) - Play & Leisure
+  6. 🤝 **Kỹ năng Xã hội** (#A29BFE) - Social Skills
+  7. 🍽️ **Tự phục vụ** (#FD79A8) - Self-Help
+- **Database Query:**
+  ```typescript
+  const { data: domains } = await supabase
+    .from("domains")
+    .select("*, goal_templates(count)")
+    .eq("is_active", true)
+    .order("order_index", { ascending: true });
+  ```
+- **Actions:**
+  - Click domain → Navigate to Goal Templates List filtered by domain
+  - Back button → Return to Student Detail
 
 #### 9. Goal Templates List Screen
 
-- **Route:** `/(protected)/goals/templates?domainId=xxx`
+- **Route:** `/(protected)/goals/templates?domainId=xxx&studentId=xxx`
+- **Mục đích:** Chọn goal template từ domain đã chọn
 - **Layout:**
-  - Header: Domain name + Back button
-  - Search bar
-  - Filter chips (Difficulty, Show assigned)
-  - List of GoalTemplateCard
+  - Header:
+    - Domain badge (icon + name + color background)
+    - Back button
+    - Total templates count
+  - Search bar (tìm theo description)
+  - Filter chips row:
+    - Difficulty: All / Easy / Medium / Hard
+    - Age range slider (18-60 months)
+    - Hide assigned (toggle)
+  - FlatList of GoalTemplateCard
 - **GoalTemplateCard:**
-  - Description (truncated)
-  - Difficulty badge
-  - Tags row
-  - "Already assigned" indicator (if applicable)
+  - Domain color stripe (left border)
+  - Goal description (full text hoặc truncated với "See more")
+  - Metadata row:
+    - Difficulty badge (Easy: Green, Medium: Orange, Hard: Red)
+    - Age range (vd: "18-36 tháng")
+  - Tags row (max 3 tags visible, horizontal scroll)
+    - Tag examples: "motor_imitation", "verbal_prompt", "repeated_goal"
+  - Footer:
+    - "Already assigned" indicator (if student đã có goal này)
+    - Assigned date (nếu có)
+  - Tap action → Navigate to Goal Preview
+- **Database Query:**
+
+  ```typescript
+  const { data: templates } = await supabase
+    .from("goal_templates")
+    .select(
+      `
+      *,
+      domain:domains(name, color, icon),
+      goal_template_tags(tag:tags(name, category))
+    `
+    )
+    .eq("domain_id", domainId)
+    .eq("is_active", true)
+    .order("difficulty_level", { ascending: true })
+    .order("order_index", { ascending: true });
+
+  // Check if already assigned to student
+  const { data: assignedGoals } = await supabase
+    .from("student_goals")
+    .select("goal_template_id")
+    .eq("student_id", studentId)
+    .neq("status", "discontinued");
+  ```
+
+- **Empty State:**
+  - Message: "Chưa có mục tiêu nào trong lĩnh vực này"
+  - Button: "Quay lại chọn lĩnh vực khác"
 
 #### 10. Goal Preview Screen
 
@@ -862,28 +925,139 @@ interface GoalCardProps {
 
 #### DomainCard Component
 
+**Mục đích:** Hiển thị domain trong Select Domain Screen
+
 **Props:**
 
 ```typescript
+interface Domain {
+  id: string;
+  code: string;
+  name: string;
+  name_en: string;
+  description: string;
+  icon: string;
+  color: string; // hex color
+  order_index: number;
+}
+
 interface DomainCardProps {
   domain: Domain;
   templatesCount: number;
   onPress: () => void;
+  disabled?: boolean;
 }
 ```
 
 **Layout:**
 
 ```
-┌──────────────────┐
-│                  │
-│   [Large Icon]   │
-│                  │
-│  Domain Name     │
-│  Description...  │
-│                  │
-│  📋 25 templates │
-└──────────────────┘
+┌──────────────────────────────────┐
+│  ┌────────────────────────────┐  │
+│  │  Background: domain.color  │  │
+│  │         (opacity 0.1)      │  │
+│  │                            │  │
+│  │      [Large Icon 64px]     │  │
+│  │          emoji/svg         │  │
+│  │                            │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  Domain Name (Bold, 18px)        │
+│  Bắt chước (Imitation)           │
+│                                  │
+│  Description (Gray, 14px)        │
+│  Khả năng bắt chước hành động... │
+│                                  │
+│  ┌──────────────────────────┐   │
+│  │ 📋 25 mục tiêu           │   │
+│  │ Badge with domain color  │   │
+│  └──────────────────────────┘   │
+│                                  │
+└──────────────────────────────────┘
+```
+
+**Styling:**
+
+- Card elevation/shadow
+- Rounded corners (12px)
+- Padding: 16px
+- Background gradient từ white → domain.color (opacity 0.05)
+- Border left: 4px solid domain.color
+- Press effect: scale 0.98 + opacity 0.8
+
+**Usage:**
+
+```typescript
+<DomainCard
+  domain={DOMAINS[0]} // IMITATION
+  templatesCount={25}
+  onPress={() => router.push(`/goals/templates?domainId=${domain.id}`)}
+/>
+```
+
+---
+
+#### DomainBadge Component
+
+**Mục đích:** Hiển thị domain badge nhỏ trong các màn hình khác
+
+**Props:**
+
+```typescript
+interface DomainBadgeProps {
+  domain: Domain;
+  size?: "sm" | "md" | "lg";
+  showIcon?: boolean;
+  showName?: boolean;
+  variant?: "filled" | "outlined" | "subtle";
+}
+```
+
+**Variants:**
+
+1. **Filled** (default): Background = domain.color, Text = white
+2. **Outlined**: Border = domain.color, Background = transparent
+3. **Subtle**: Background = domain.color (opacity 0.1), Text = domain.color
+
+**Sizes:**
+
+- **sm:** 20px height, 12px font, 16px icon
+- **md:** 28px height, 14px font, 20px icon
+- **lg:** 36px height, 16px font, 24px icon
+
+**Layout:**
+
+```
+┌──────────────────────────┐
+│ [Icon] Domain Name       │  ← Filled variant
+└──────────────────────────┘
+
+┌──────────────────────────┐
+│ [Icon] Domain Name       │  ← Outlined variant
+└──────────────────────────┘
+
+┌──────────────────────────┐
+│ [Icon] Domain Name       │  ← Subtle variant
+└──────────────────────────┘
+```
+
+**Usage:**
+
+```typescript
+// In GoalCard
+<DomainBadge
+  domain={goal.domain}
+  size="sm"
+  variant="subtle"
+/>
+
+// In Report Detail
+<DomainBadge
+  domain={goal.domain}
+  size="md"
+  variant="filled"
+  showIcon={true}
+/>
 ```
 
 #### ReportCard Component
@@ -2010,15 +2184,297 @@ Dựa theo **DATABASE_DESIGN_v2.0_COMPLETE.md**:
 - `parents` - Parent accounts
 - `student_teachers` - Teacher-student assignments
 - `parent_students` - Parent-student relationships
-- `domains` - 7 intervention domains
-- `goal_templates` - Pre-defined goal templates
+- `domains` - 7 intervention domains (xem chi tiết bên dưới)
+- `goal_templates` - Pre-defined goal templates (nhóm theo domain)
 - `student_goals` - Goals assigned to students
 - `reports` - Session reports
 - `report_goals` - Goal progress in each report
 - `notifications` - Push notifications
 - `report_views` - Track when parents view reports
 
-### 5. Row Level Security (RLS) Policies
+### 5. Intervention Domains (7 Lĩnh Vực Can Thiệp)
+
+**Table: `domains`**
+
+Hệ thống ABA được chia thành 7 lĩnh vực can thiệp chính. Mỗi lĩnh vực chứa nhiều mục tiêu (goal templates).
+
+#### 📊 Danh Sách 7 Domains
+
+```typescript
+// constants/domains.ts
+export const DOMAINS = [
+  {
+    id: 1,
+    code: "IMITATION",
+    name: "Bắt chước (Imitation)",
+    name_en: "Imitation",
+    description:
+      "Khả năng quan sát và bắt chước hành động, âm thanh, hoặc cử chỉ của người khác",
+    icon: "👤", // hoặc dùng icon library
+    color: "#FF6B6B", // Red
+    order_index: 1,
+    is_active: true,
+  },
+  {
+    id: 2,
+    code: "RECEPTIVE_LANGUAGE",
+    name: "Ngôn ngữ Receptive",
+    name_en: "Receptive Language",
+    description: "Khả năng hiểu và xử lý ngôn ngữ được nghe hoặc đọc",
+    icon: "👂",
+    color: "#4ECDC4", // Teal
+    order_index: 2,
+    is_active: true,
+  },
+  {
+    id: 3,
+    code: "EXPRESSIVE_LANGUAGE",
+    name: "Ngôn ngữ Expressive",
+    name_en: "Expressive Language",
+    description:
+      "Khả năng truyền đạt ý tưởng, nhu cầu và cảm xúc qua lời nói hoặc ký hiệu",
+    icon: "💬",
+    color: "#45B7D1", // Blue
+    order_index: 3,
+    is_active: true,
+  },
+  {
+    id: 4,
+    code: "VISUAL_PERFORMANCE",
+    name: "Nhận thức thị giác",
+    name_en: "Visual Performance",
+    description:
+      "Kỹ năng xử lý thông tin thị giác, ghép cặp, phân loại, và giải quyết vấn đề trực quan",
+    icon: "👁️",
+    color: "#96CEB4", // Green
+    order_index: 4,
+    is_active: true,
+  },
+  {
+    id: 5,
+    code: "PLAY_LEISURE",
+    name: "Chơi & Giải trí",
+    name_en: "Play & Leisure",
+    description:
+      "Khả năng tham gia vào các hoạt động vui chơi độc lập hoặc tương tác với người khác",
+    icon: "🎮",
+    color: "#FFEAA7", // Yellow
+    order_index: 5,
+    is_active: true,
+  },
+  {
+    id: 6,
+    code: "SOCIAL_SKILLS",
+    name: "Kỹ năng Xã hội",
+    name_en: "Social Skills",
+    description:
+      "Kỹ năng tương tác, chia sẻ, hợp tác, và hiểu cảm xúc của người khác",
+    icon: "🤝",
+    color: "#A29BFE", // Purple
+    order_index: 6,
+    is_active: true,
+  },
+  {
+    id: 7,
+    code: "SELF_HELP",
+    name: "Tự phục vụ",
+    name_en: "Self-Help",
+    description:
+      "Các kỹ năng sinh hoạt hàng ngày: ăn uống, mặc quần áo, vệ sinh cá nhân",
+    icon: "🍽️",
+    color: "#FD79A8", // Pink
+    order_index: 7,
+    is_active: true,
+  },
+] as const;
+
+export type DomainCode = (typeof DOMAINS)[number]["code"];
+```
+
+#### 🎯 Mỗi Domain chứa Goal Templates
+
+**Ví dụ cấu trúc dữ liệu:**
+
+```typescript
+// Domain: IMITATION (Bắt chước)
+const imitationGoals = [
+  {
+    id: "gt-001",
+    domain_id: 1, // IMITATION
+    description: "Child can imitate 3 simple play actions with objects",
+    description_vi: "Trẻ có thể bắt chước 3 hành động chơi đơn giản với đồ vật",
+    difficulty_level: "easy",
+    age_range_min: 18, // months
+    age_range_max: 36,
+    tags: ["motor_imitation", "object_manipulation"],
+    is_active: true,
+  },
+  {
+    id: "gt-002",
+    domain_id: 1,
+    description:
+      "Child can imitate 5 gross motor movements (e.g., jump, clap, wave)",
+    description_vi:
+      "Trẻ có thể bắt chước 5 động tác vận động thô (vd: nhảy, vỗ tay, vẫy tay)",
+    difficulty_level: "medium",
+    age_range_min: 24,
+    age_range_max: 48,
+    tags: ["gross_motor", "imitation"],
+    is_active: true,
+  },
+  // ... more goals
+];
+
+// Domain: RECEPTIVE_LANGUAGE
+const receptiveLanguageGoals = [
+  {
+    id: "gt-101",
+    domain_id: 2,
+    description: "Child can follow 1-step directions without gestures",
+    description_vi: "Trẻ có thể làm theo chỉ dẫn 1 bước mà không cần cử chỉ",
+    difficulty_level: "easy",
+    age_range_min: 24,
+    age_range_max: 36,
+    tags: ["following_directions", "comprehension"],
+    is_active: true,
+  },
+  // ... more goals
+];
+
+// ... tương tự cho 5 domains còn lại
+```
+
+#### 🎨 UI Components cho Domains
+
+**DomainCard Component:**
+
+```typescript
+interface DomainCardProps {
+  domain: Domain;
+  templatesCount: number;
+  onPress: () => void;
+}
+
+// Hiển thị domain với màu sắc riêng, icon, số lượng templates
+```
+
+**DomainBadge Component:**
+
+```typescript
+// Hiển thị domain badge trong GoalCard, ReportCard
+// Màu nền theo domain.color
+```
+
+#### 📱 Screens sử dụng Domains
+
+1. **Select Domain Screen:**
+
+   - Grid hiển thị 7 domain cards
+   - Mỗi card: Icon + Name + Description + Templates count
+   - Click vào domain → Goal Templates List filtered by domain
+
+2. **Goal Templates List Screen:**
+
+   - Filter by domain (hiển thị ở header)
+   - List goals thuộc domain đã chọn
+
+3. **Student Goals Tab:**
+
+   - Goals grouped by domain (collapsible sections)
+   - Mỗi section: Domain header với màu + icon
+
+4. **Report Detail Screen:**
+
+   - Goals grouped by domain
+   - Domain badges cho mỗi goal
+
+5. **Progress Charts:**
+   - Domain breakdown chart (pie/bar chart)
+   - Progress per domain over time
+
+#### 🗄️ Database Schema cho Domains
+
+```sql
+-- Table: domains
+CREATE TABLE domains (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code VARCHAR(50) UNIQUE NOT NULL, -- 'IMITATION', 'RECEPTIVE_LANGUAGE', etc.
+  name VARCHAR(100) NOT NULL,
+  name_en VARCHAR(100),
+  description TEXT,
+  icon VARCHAR(10), -- emoji or icon name
+  color VARCHAR(7), -- hex color code
+  order_index INTEGER NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed data
+INSERT INTO domains (code, name, name_en, description, icon, color, order_index) VALUES
+('IMITATION', 'Bắt chước', 'Imitation', 'Khả năng bắt chước hành động, âm thanh, cử chỉ', '👤', '#FF6B6B', 1),
+('RECEPTIVE_LANGUAGE', 'Ngôn ngữ Receptive', 'Receptive Language', 'Hiểu và xử lý ngôn ngữ', '👂', '#4ECDC4', 2),
+('EXPRESSIVE_LANGUAGE', 'Ngôn ngữ Expressive', 'Expressive Language', 'Truyền đạt ý tưởng và cảm xúc', '💬', '#45B7D1', 3),
+('VISUAL_PERFORMANCE', 'Nhận thức thị giác', 'Visual Performance', 'Xử lý thông tin thị giác', '👁️', '#96CEB4', 4),
+('PLAY_LEISURE', 'Chơi & Giải trí', 'Play & Leisure', 'Hoạt động vui chơi', '🎮', '#FFEAA7', 5),
+('SOCIAL_SKILLS', 'Kỹ năng Xã hội', 'Social Skills', 'Tương tác và hợp tác', '🤝', '#A29BFE', 6),
+('SELF_HELP', 'Tự phục vụ', 'Self-Help', 'Kỹ năng sinh hoạt hàng ngày', '🍽️', '#FD79A8', 7);
+
+-- Goal templates belong to a domain
+ALTER TABLE goal_templates
+ADD COLUMN domain_id UUID REFERENCES domains(id);
+
+CREATE INDEX idx_goal_templates_domain ON goal_templates(domain_id);
+```
+
+#### 📊 Fetch Domains từ Supabase
+
+```typescript
+// services/domainService.ts
+export const fetchDomains = async () => {
+  const { data, error } = await supabase
+    .from("domains")
+    .select(
+      `
+      *,
+      goal_templates(count)
+    `
+    )
+    .eq("is_active", true)
+    .order("order_index", { ascending: true });
+
+  if (error) throw error;
+  return data;
+};
+
+export const fetchDomainWithTemplates = async (domainId: string) => {
+  const { data, error } = await supabase
+    .from("domains")
+    .select(
+      `
+      *,
+      goal_templates(
+        id,
+        description,
+        difficulty_level,
+        age_range_min,
+        age_range_max,
+        tags
+      )
+    `
+    )
+    .eq("id", domainId)
+    .eq("goal_templates.is_active", true)
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+```
+
+---
+
+### 6. Row Level Security (RLS) Policies
 
 **Ví dụ cho `students` table:**
 
