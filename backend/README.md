@@ -1,100 +1,451 @@
-# 🗄️ Database Design & API Specification v1.1 - Parent Portal
+# 🗄️ Database Design & API Specification v2.0 - COMPLETE
 
 **Project:** UMX - Student Intervention Management System  
 **Date:** October 21, 2025  
-**Version:** 1.1 (Added Parent Portal)  
-**Database:** PostgreSQL / MySQL / MongoDB (Flexible)  
-**New Features:** 👨‍👩‍👧 Parent Access, Report Viewing, Student Progress Tracking
+**Version:** 2.0 (Complete System)  
+**Database:** PostgreSQL (Recommended) / MySQL  
+**Features:** Teachers, Students, Parents, Goals, Reports, Notifications
 
 ---
 
 ## 📋 Table of Contents
 
-1. [What's New in v1.1](#whats-new-in-v11)
-2. [System Overview](#system-overview)
-3. [Database Schema Updates](#database-schema-updates)
-4. [Entity Relationship Diagram](#entity-relationship-diagram)
-5. [Parent Portal API Endpoints](#parent-portal-api-endpoints)
-6. [Security & Access Control](#security--access-control)
-7. [Mobile App Features](#mobile-app-features)
-8. [Implementation Guide](#implementation-guide)
-
----
-
-## 🆕 What's New in v1.1
-
-### Parent Portal Features
-
-✨ **New Capabilities:**
-
-1. **Parent Account Management**
-
-   - Separate authentication for parents
-   - Can have multiple children in the system
-   - Secure access with email/phone + password
-
-2. **View Student Information**
-
-   - See child's profile (name, age, diagnosis)
-   - View assigned goals and progress
-   - Track milestone achievements
-
-3. **Report Access**
-
-   - View all reports for their children
-   - Filter by date, teacher, rating
-   - See detailed progress per goal
-   - Export reports as PDF
-
-4. **Notifications**
-
-   - New report published
-   - Goal completed
-   - Important updates from teachers
-
-5. **Communication** (Optional Phase 2)
-   - Message teachers
-   - Schedule meetings
-   - Receive announcements
-
-### Changes from v1.0
-
-- ✅ Added `parents` table (separate from users)
-- ✅ Added `parent_students` table (many-to-many)
-- ✅ Added `notifications` table
-- ✅ Updated `students` table (separate parent relationship)
-- ✅ Added parent-specific API endpoints
-- ✅ Enhanced security with parent access control
+1. [System Overview](#system-overview)
+2. [Complete Database Schema](#complete-database-schema)
+3. [Entity Relationship Diagram](#entity-relationship-diagram)
+4. [API Endpoints - Teachers](#api-endpoints---teachers)
+5. [API Endpoints - Parents](#api-endpoints---parents)
+6. [Data Validation & Security](#data-validation--security)
+7. [Implementation Roadmap](#implementation-roadmap)
 
 ---
 
 ## 🎯 System Overview
 
-### Updated Business Requirements
+### Business Requirements
 
-**UMX System** now manages:
+**UMX System** quản lý đầy đủ:
 
 - 👨‍🏫 **Teachers (Users)**: Giáo viên can thiệp ABA
 - 👶 **Students**: Học sinh tự kỷ
-- 👨‍👩‍👧 **Parents**: Phụ huynh học sinh (NEW!)
+- 👨‍👩‍👧 **Parents**: Phụ huynh học sinh (với portal riêng)
 - 🎯 **Domains & Goals**: Lĩnh vực và mục tiêu can thiệp
 - 📊 **Reports**: Báo cáo tiến độ học sinh
-- 🔔 **Notifications**: Thông báo cho phụ huynh (NEW!)
+- 🔔 **Notifications**: Thông báo cho phụ huynh
 
 ### User Roles
 
 ```
 System Users:
-├── Admin (Full access)
+├── Admin (Full access - manage teachers, students, goals)
 ├── Teacher (Create/Edit students, goals, reports)
 └── Parent (View only - their children's data)
 ```
 
+### Core Features
+
+**For Teachers/Admin:**
+
+1. ✅ Teacher authentication & authorization
+2. ✅ Student management (CRUD)
+3. ✅ Goal templates & student goals
+4. ✅ Create progress reports
+5. ✅ Track student progress over time
+6. ✅ Assign students to teachers
+
+**For Parents:**
+
+1. ✅ Parent authentication (separate from teachers)
+2. ✅ View children's profiles
+3. ✅ View all reports for their children
+4. ✅ Track goal progress
+5. ✅ Receive notifications (new report, goal completed)
+6. ✅ Export reports as PDF
+
 ---
 
-## 🗃️ Database Schema Updates
+## 🗃️ Complete Database Schema
 
-### NEW: 1. **parents** Table
+### Overview: 14 Tables
+
+**Core Tables:**
+
+1. `users` - Teachers/Admin accounts
+2. `students` - Student profiles
+3. `student_teachers` - Student-Teacher relationships (Many-to-Many)
+
+**Goal System:** 4. `domains` - Goal domains (Imitation, Language, etc.) 5. `tags` - Goal tags (support types, difficulty) 6. `goal_templates` - System-wide goal templates 7. `goal_template_tags` - Template-Tag relationships 8. `student_goals` - Student-specific goal instances
+
+**Reports:** 9. `reports` - Progress reports 10. `report_goals` - Goals tracked in each report
+
+**Parent Portal:** 11. `parents` - Parent accounts (separate auth) 12. `parent_students` - Parent-Student relationships (Many-to-Many) 13. `notifications` - Notifications for parents 14. `report_views` - Track parent report views
+
+**Audit:** 15. `activity_logs` - Audit trail for all actions
+
+---
+
+## 📊 Detailed Schema
+
+### 1. **users** (Teachers/Admin)
+
+```sql
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Authentication
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+
+  -- Profile
+  full_name VARCHAR(255) NOT NULL,
+  phone VARCHAR(20),
+  avatar_url VARCHAR(500),
+
+  -- Authorization
+  role VARCHAR(20) NOT NULL DEFAULT 'teacher', -- 'admin', 'teacher'
+
+  -- Status
+  is_active BOOLEAN DEFAULT true,
+  last_login_at TIMESTAMP,
+
+  -- Metadata
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  INDEX idx_email (email),
+  INDEX idx_role (role),
+  INDEX idx_is_active (is_active)
+);
+
+-- Seed admin
+INSERT INTO users (email, password_hash, full_name, role) VALUES
+  ('admin@umx.com', '$2b$10$...', 'Admin User', 'admin'),
+  ('teacher1@umx.com', '$2b$10$...', 'Nguyễn Văn Giáo Viên', 'teacher');
+```
+
+---
+
+### 2. **students**
+
+```sql
+CREATE TABLE students (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Basic Info
+  student_code VARCHAR(50) UNIQUE NOT NULL, -- HS001, HS002
+  full_name VARCHAR(255) NOT NULL,
+  date_of_birth DATE NOT NULL,
+  gender VARCHAR(10) NOT NULL, -- 'male', 'female', 'other'
+  avatar_url VARCHAR(500),
+
+  -- Parent/Guardian Information (Legacy - for backward compatibility)
+  parent_name VARCHAR(255),
+  parent_phone VARCHAR(20),
+  parent_email VARCHAR(255),
+  address TEXT,
+
+  -- Medical Information
+  diagnosis VARCHAR(255), -- 'Autism Spectrum Disorder', 'ASD', 'ADHD'
+  diagnosis_date DATE,
+  medical_notes TEXT,
+
+  -- Enrollment
+  enrollment_date DATE NOT NULL,
+  status VARCHAR(20) DEFAULT 'active', -- 'active', 'inactive', 'graduated', 'on_hold'
+
+  -- Assignment
+  primary_teacher_id UUID, -- FK to users
+
+  -- Parent Portal Settings
+  parent_portal_enabled BOOLEAN DEFAULT true,
+  parent_can_view_medical_notes BOOLEAN DEFAULT true,
+  parent_can_view_behavior_notes BOOLEAN DEFAULT true,
+
+  -- Metadata
+  notes TEXT,
+  created_by UUID, -- FK to users
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (primary_teacher_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+
+  INDEX idx_student_code (student_code),
+  INDEX idx_status (status),
+  INDEX idx_primary_teacher (primary_teacher_id),
+  INDEX idx_full_name (full_name)
+);
+
+-- Seed example
+INSERT INTO students (student_code, full_name, date_of_birth, gender, parent_name, parent_phone, enrollment_date, primary_teacher_id) VALUES
+  ('HS001', 'Hào Hổ', '2018-05-15', 'male', 'Nguyễn Văn Phụ Huynh', '0901234567', '2020-09-01', (SELECT id FROM users WHERE email = 'teacher1@umx.com'));
+```
+
+---
+
+### 3. **student_teachers** (Many-to-Many)
+
+```sql
+CREATE TABLE student_teachers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID NOT NULL,
+  teacher_id UUID NOT NULL,
+  role VARCHAR(50) DEFAULT 'primary', -- 'primary', 'assistant', 'consultant'
+  assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  assigned_by UUID, -- FK to users
+
+  FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL,
+
+  UNIQUE KEY unique_student_teacher (student_id, teacher_id),
+  INDEX idx_student (student_id),
+  INDEX idx_teacher (teacher_id)
+);
+```
+
+---
+
+### 4. **domains** (Goal Domains)
+
+```sql
+CREATE TABLE domains (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  order_index INT NOT NULL DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  icon VARCHAR(100), -- Icon name
+  color VARCHAR(7), -- Hex color
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  INDEX idx_order (order_index),
+  INDEX idx_is_active (is_active)
+);
+
+-- Seed data
+INSERT INTO domains (name, description, order_index, icon, color) VALUES
+  ('Imitation', 'Motor and verbal imitation skills', 1, 'copy', '#FF6B6B'),
+  ('Expressive Language', 'Communication and expression abilities', 2, 'chat', '#4ECDC4'),
+  ('Receptive Language', 'Understanding and following instructions', 3, 'ear', '#45B7D1'),
+  ('Cognition', 'Thinking, learning, and problem-solving', 4, 'brain', '#96CEB4'),
+  ('Self-Help', 'Daily living and independence skills', 5, 'hands-helping', '#FFEAA7'),
+  ('Social Skills', 'Interaction and social understanding', 6, 'users', '#DFE6E9'),
+  ('Motor Skills', 'Fine and gross motor development', 7, 'running', '#74B9FF');
+```
+
+---
+
+### 5. **tags** (Goal Tags)
+
+```sql
+CREATE TABLE tags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(100) NOT NULL UNIQUE,
+  description TEXT,
+  color VARCHAR(7),
+  category VARCHAR(50), -- 'support_type', 'difficulty', 'skill_type'
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+  INDEX idx_name (name),
+  INDEX idx_category (category)
+);
+
+-- Seed data
+INSERT INTO tags (name, description, category, color) VALUES
+  ('Repeated goal', 'Goal repeated from previous cycle', 'status', '#95A5A6'),
+  ('Partial physical support', 'Requires partial physical prompting', 'support_type', '#E74C3C'),
+  ('Full physical support', 'Requires full physical prompting', 'support_type', '#C0392B'),
+  ('Verbal prompt', 'Requires verbal prompting', 'support_type', '#3498DB'),
+  ('Modeling', 'Learn through demonstration', 'support_type', '#9B59B6'),
+  ('Independent', 'Can perform independently', 'support_type', '#27AE60'),
+  ('Easy', 'Easy difficulty', 'difficulty', '#2ECC71'),
+  ('Medium', 'Medium difficulty', 'difficulty', '#F39C12'),
+  ('Hard', 'Hard difficulty', 'difficulty', '#E67E22');
+```
+
+---
+
+### 6. **goal_templates** (System-wide Templates)
+
+```sql
+CREATE TABLE goal_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain_id UUID NOT NULL,
+  description TEXT NOT NULL,
+  order_index INT NOT NULL DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+
+  difficulty_level VARCHAR(20), -- 'easy', 'medium', 'hard'
+  age_range_min INT,
+  age_range_max INT,
+
+  created_by UUID,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+
+  INDEX idx_domain (domain_id),
+  INDEX idx_is_active (is_active),
+  INDEX idx_order (order_index)
+);
+
+-- Seed example goals
+INSERT INTO goal_templates (domain_id, description, order_index, difficulty_level) VALUES
+  ((SELECT id FROM domains WHERE name = 'Imitation'), 'Child can imitate 3 play actions with a doll, teddy bear (spoon-feeding, holding a cup to drink, wiping mouth) with 70% success with support', 1, 'medium'),
+  ((SELECT id FROM domains WHERE name = 'Expressive Language'), 'Different types of cries for different types of discomfort', 1, 'easy'),
+  ((SELECT id FROM domains WHERE name = 'Cognition'), 'Comes after a verbal command (without tools/objects)', 1, 'medium');
+```
+
+---
+
+### 7. **goal_template_tags** (Many-to-Many)
+
+```sql
+CREATE TABLE goal_template_tags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  goal_template_id UUID NOT NULL,
+  tag_id UUID NOT NULL,
+
+  FOREIGN KEY (goal_template_id) REFERENCES goal_templates(id) ON DELETE CASCADE,
+  FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+
+  UNIQUE KEY unique_goal_tag (goal_template_id, tag_id),
+  INDEX idx_goal (goal_template_id),
+  INDEX idx_tag (tag_id)
+);
+```
+
+---
+
+### 8. **student_goals** (Student-specific Goal Instances)
+
+```sql
+CREATE TABLE student_goals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID NOT NULL,
+  goal_template_id UUID NOT NULL,
+
+  -- Progress Tracking
+  target_progress INT DEFAULT 100, -- Target % (e.g., 80%)
+  current_progress INT DEFAULT 0, -- Current progress (0-100)
+
+  -- Status
+  status VARCHAR(20) DEFAULT 'not_started',
+  -- 'not_started', 'in_progress', 'completed', 'discontinued', 'on_hold'
+
+  -- Timeline
+  start_date DATE,
+  target_end_date DATE,
+  actual_end_date DATE,
+
+  -- Notes
+  notes TEXT,
+  discontinue_reason TEXT,
+
+  -- Metadata
+  created_by UUID,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  FOREIGN KEY (goal_template_id) REFERENCES goal_templates(id) ON DELETE RESTRICT,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+
+  INDEX idx_student (student_id),
+  INDEX idx_status (status),
+  INDEX idx_start_date (start_date)
+);
+```
+
+---
+
+### 9. **reports** (Progress Reports)
+
+```sql
+CREATE TABLE reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID NOT NULL,
+  teacher_id UUID NOT NULL,
+
+  -- Session Information
+  session_date DATE NOT NULL,
+  session_duration INT, -- Minutes
+
+  -- Overall Assessment
+  rating INT NOT NULL, -- 1-5 stars
+  participation_level VARCHAR(20), -- 'high', 'medium', 'low'
+
+  -- Status
+  status VARCHAR(20) DEFAULT 'draft', -- 'draft', 'submitted', 'reviewed', 'archived'
+
+  -- Content
+  notes TEXT,
+  recommendations TEXT,
+
+  -- Parent Portal
+  visible_to_parents BOOLEAN DEFAULT true,
+  parent_notification_sent BOOLEAN DEFAULT false,
+  parent_notification_sent_at TIMESTAMP,
+
+  -- Review
+  reviewed_by UUID,
+  reviewed_at TIMESTAMP,
+  review_notes TEXT,
+
+  -- Metadata
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+
+  INDEX idx_student (student_id),
+  INDEX idx_teacher (teacher_id),
+  INDEX idx_session_date (session_date),
+  INDEX idx_status (status)
+);
+```
+
+---
+
+### 10. **report_goals** (Goals in Report)
+
+```sql
+CREATE TABLE report_goals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  report_id UUID NOT NULL,
+  student_goal_id UUID NOT NULL,
+
+  -- Progress
+  progress_recorded INT NOT NULL, -- 0-100%
+  previous_progress INT,
+
+  -- Observations
+  notes TEXT,
+  observations TEXT,
+  support_level VARCHAR(50), -- 'independent', 'verbal', 'physical', 'full_physical'
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE,
+  FOREIGN KEY (student_goal_id) REFERENCES student_goals(id) ON DELETE CASCADE,
+
+  UNIQUE KEY unique_report_goal (report_id, student_goal_id),
+  INDEX idx_report (report_id),
+  INDEX idx_goal (student_goal_id)
+);
+```
+
+---
+
+### 11. **parents** (Parent Accounts)
 
 ```sql
 CREATE TABLE parents (
@@ -105,18 +456,16 @@ CREATE TABLE parents (
   phone VARCHAR(20) UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
 
-  -- Personal Information
+  -- Profile
   full_name VARCHAR(255) NOT NULL,
   relationship VARCHAR(50) NOT NULL, -- 'mother', 'father', 'guardian', 'other'
   avatar_url VARCHAR(500),
-
-  -- Contact
   secondary_phone VARCHAR(20),
   address TEXT,
 
   -- Account Status
   is_active BOOLEAN DEFAULT true,
-  is_verified BOOLEAN DEFAULT false, -- Email/Phone verification
+  is_verified BOOLEAN DEFAULT false,
   email_verified_at TIMESTAMP,
   phone_verified_at TIMESTAMP,
 
@@ -133,43 +482,38 @@ CREATE TABLE parents (
   password_reset_expires TIMESTAMP,
 
   -- Metadata
+  created_by UUID, -- Teacher/Admin who created
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  created_by UUID, -- FK to users (admin/teacher who created)
 
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
 
   INDEX idx_email (email),
   INDEX idx_phone (phone),
-  INDEX idx_is_active (is_active),
-  INDEX idx_full_name (full_name)
+  INDEX idx_is_active (is_active)
 );
 
--- Seed example parents
+-- Seed example
 INSERT INTO parents (email, password_hash, full_name, relationship, phone) VALUES
-  ('parent1@email.com', '$2b$10$...', 'Nguyễn Văn Phụ Huynh', 'father', '0901234567'),
-  ('parent2@email.com', '$2b$10$...', 'Trần Thị Mẹ', 'mother', '0902345678');
+  ('parent1@email.com', '$2b$10$...', 'Nguyễn Văn Phụ Huynh', 'father', '0901234567');
 ```
 
 ---
 
-### NEW: 2. **parent_students** (Many-to-Many Relationship)
+### 12. **parent_students** (Many-to-Many)
 
 ```sql
--- 1 parent có thể có nhiều children
--- 1 student có thể có nhiều parents (father, mother, guardian)
 CREATE TABLE parent_students (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   parent_id UUID NOT NULL,
   student_id UUID NOT NULL,
-  relationship VARCHAR(50) NOT NULL, -- 'mother', 'father', 'guardian', 'other'
-  is_primary BOOLEAN DEFAULT false, -- Primary contact person
+  relationship VARCHAR(50) NOT NULL, -- 'mother', 'father', 'guardian'
+  is_primary BOOLEAN DEFAULT false,
   can_view_reports BOOLEAN DEFAULT true,
   can_receive_notifications BOOLEAN DEFAULT true,
 
-  -- Metadata
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  created_by UUID, -- FK to users (who linked parent to student)
+  created_by UUID,
 
   FOREIGN KEY (parent_id) REFERENCES parents(id) ON DELETE CASCADE,
   FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
@@ -181,31 +525,26 @@ CREATE TABLE parent_students (
   INDEX idx_is_primary (is_primary)
 );
 
--- Seed example relationships
+-- Link parent to student
 INSERT INTO parent_students (parent_id, student_id, relationship, is_primary) VALUES
-  (
-    (SELECT id FROM parents WHERE email = 'parent1@email.com'),
-    (SELECT id FROM students WHERE student_code = 'HS001'),
-    'father',
-    true
-  );
+  ((SELECT id FROM parents WHERE email = 'parent1@email.com'),
+   (SELECT id FROM students WHERE student_code = 'HS001'),
+   'father', true);
 ```
 
 ---
 
-### NEW: 3. **notifications** Table
+### 13. **notifications** (Parent Notifications)
 
 ```sql
 CREATE TABLE notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-  -- Recipient
   parent_id UUID NOT NULL,
-  student_id UUID, -- Related student (optional)
+  student_id UUID,
 
   -- Content
-  type VARCHAR(50) NOT NULL,
-  -- 'new_report', 'goal_completed', 'goal_assigned', 'announcement', 'reminder'
+  type VARCHAR(50) NOT NULL, -- 'new_report', 'goal_completed', 'announcement'
   title VARCHAR(255) NOT NULL,
   message TEXT NOT NULL,
 
@@ -225,20 +564,16 @@ CREATE TABLE notifications (
 
   -- Priority
   priority VARCHAR(20) DEFAULT 'normal', -- 'low', 'normal', 'high', 'urgent'
+  expires_at TIMESTAMP,
 
-  -- Expiry
-  expires_at TIMESTAMP, -- Notification expires and auto-deleted
-
-  -- Metadata
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  created_by UUID, -- FK to users (teacher/admin who triggered)
+  created_by UUID,
 
   FOREIGN KEY (parent_id) REFERENCES parents(id) ON DELETE CASCADE,
   FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
 
   INDEX idx_parent (parent_id),
-  INDEX idx_student (student_id),
   INDEX idx_is_read (is_read),
   INDEX idx_type (type),
   INDEX idx_created_at (created_at)
@@ -247,7 +582,7 @@ CREATE TABLE notifications (
 
 ---
 
-### NEW: 4. **report_views** (Track Parent Report Views)
+### 14. **report_views** (Track Parent Views)
 
 ```sql
 CREATE TABLE report_views (
@@ -255,10 +590,9 @@ CREATE TABLE report_views (
   report_id UUID NOT NULL,
   parent_id UUID NOT NULL,
 
-  -- View details
   viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  view_duration_seconds INT, -- How long they viewed
-  device_type VARCHAR(50), -- 'mobile', 'tablet', 'desktop', 'app'
+  view_duration_seconds INT,
+  device_type VARCHAR(50), -- 'mobile', 'tablet', 'desktop'
   ip_address VARCHAR(45),
 
   FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE,
@@ -272,177 +606,295 @@ CREATE TABLE report_views (
 
 ---
 
-### UPDATED: **students** Table
+### 15. **activity_logs** (Audit Trail)
 
 ```sql
--- Add columns to existing students table
-ALTER TABLE students
-  ADD COLUMN parent_portal_enabled BOOLEAN DEFAULT true,
-  ADD COLUMN parent_can_view_medical_notes BOOLEAN DEFAULT true,
-  ADD COLUMN parent_can_view_behavior_notes BOOLEAN DEFAULT true;
+CREATE TABLE activity_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID,
+  action VARCHAR(100) NOT NULL, -- 'create', 'update', 'delete', 'login'
+  entity_type VARCHAR(50) NOT NULL, -- 'student', 'report', 'goal'
+  entity_id UUID,
+  old_values JSON,
+  new_values JSON,
+  ip_address VARCHAR(45),
+  user_agent TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
--- Update existing records
-UPDATE students SET parent_portal_enabled = true;
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+
+  INDEX idx_user (user_id),
+  INDEX idx_entity (entity_type, entity_id),
+  INDEX idx_action (action),
+  INDEX idx_created_at (created_at)
+);
 ```
 
 ---
 
-### UPDATED: **reports** Table
+## 🔗 Entity Relationship Diagram
 
-```sql
--- Add columns for parent visibility
-ALTER TABLE reports
-  ADD COLUMN visible_to_parents BOOLEAN DEFAULT true,
-  ADD COLUMN parent_notification_sent BOOLEAN DEFAULT false,
-  ADD COLUMN parent_notification_sent_at TIMESTAMP;
-
--- Update existing records
-UPDATE reports SET visible_to_parents = true WHERE status = 'submitted';
 ```
+┌─────────────┐         ┌──────────────────┐         ┌─────────────┐
+│    users    │         │     students     │         │   parents   │
+│  (teachers) │         │                  │         │             │
+│             │         │                  │         │             │
+│ • id (PK)   │────┐    │ • id (PK)        │    ┌────│ • id (PK)   │
+│ • email     │    │    │ • student_code   │    │    │ • email     │
+│ • role      │    │    │ • full_name      │    │    │ • phone     │
+│ • is_active │    │    │ • primary_teacher│────┘    │ • is_active │
+└─────────────┘    │    │   _id (FK)       │         └─────────────┘
+                   │    └──────────────────┘                 │
+                   │             │                            │
+                   │             ├──────────┬─────────────────┤
+                   │             │          │                 │
+                   │             ▼          ▼                 ▼
+                   │    ┌─────────────┬─────────────┬──────────────────┐
+                   │    │   student   │   parent    │   notifications  │
+                   │    │  _teachers  │  _students  │                  │
+                   └────│• student(FK)│• parent(FK) │ • parent_id (FK) │
+                        │• teacher(FK)│• student(FK)│ • type           │
+                        └─────────────┴─────────────┴──────────────────┘
+                                 │
+                        ┌────────┴────────┐
+                        ▼                 ▼
+               ┌──────────────┐  ┌──────────────┐
+               │   domains    │  │ student_goals│
+               │              │  │              │
+               │ • id (PK)    │  │ • id (PK)    │
+               │ • name       │  │ • student(FK)│
+               │ • order      │  │ • goal_tpl(FK│
+               └──────────────┘  │ • progress   │
+                        │         │ • status     │
+                        │         └──────────────┘
+                        ▼                 │
+               ┌──────────────┐           │
+               │goal_templates│           │
+               │              │           │
+               │ • id (PK)    │───────────┘
+               │ • domain(FK) │
+               │ • description│
+               └──────────────┘
+                        │
+                        ├─────────────┬──────────────┐
+                        ▼             ▼              ▼
+               ┌─────────────┐ ┌──────────┐  ┌─────────────┐
+               │    tags     │ │ reports  │  │report_goals │
+               │             │ │          │  │             │
+               │ • id (PK)   │ │• id (PK) │  │• report(FK) │
+               │ • name      │ │• student │  │• stud_goal  │
+               │ • category  │ │  (FK)    │  │  (FK)       │
+               └─────────────┘ │• teacher │  │• progress   │
+                               │  (FK)    │  │  _recorded  │
+                               └──────────┘  └─────────────┘
+                                      │
+                                      ▼
+                               ┌──────────────┐
+                               │ report_views │
+                               │              │
+                               │• report (FK) │
+                               │• parent (FK) │
+                               │• viewed_at   │
+                               └──────────────┘
+```
+
+**Key Relationships:**
+
+- `users` (1) ←→ (N) `students` (primary teacher)
+- `users` (N) ←→ (N) `students` (via `student_teachers`)
+- `parents` (N) ←→ (N) `students` (via `parent_students`)
+- `domains` (1) ←→ (N) `goal_templates`
+- `goal_templates` (N) ←→ (N) `tags` (via `goal_template_tags`)
+- `students` (1) ←→ (N) `student_goals`
+- `goal_templates` (1) ←→ (N) `student_goals`
+- `students` (1) ←→ (N) `reports`
+- `users` (1) ←→ (N) `reports` (as teacher)
+- `reports` (1) ←→ (N) `report_goals`
+- `student_goals` (1) ←→ (N) `report_goals`
+- `parents` (1) ←→ (N) `notifications`
+- `reports` (1) ←→ (N) `report_views`
 
 ---
 
-## 🔗 Updated Entity Relationship Diagram
+## 🔌 API Endpoints - Teachers
 
-```
-┌─────────────┐          ┌──────────────────┐          ┌─────────────┐
-│    users    │          │     students     │          │   parents   │
-│  (teachers) │          │                  │          │             │
-│             │          │                  │          │             │
-│ • id (PK)   │──────┐   │ • id (PK)        │   ┌──────│ • id (PK)   │
-│ • email     │      │   │ • student_code   │   │      │ • email     │
-│ • role      │      │   │ • full_name      │   │      │ • full_name │
-└─────────────┘      │   │ • primary_teacher│───┤      │ • phone     │
-                     │   │   _id (FK)       │   │      │ • is_active │
-                     │   └──────────────────┘   │      └─────────────┘
-                     │            │              │               │
-                     │            │              │               │
-                     │            ▼              │               │
-                     │   ┌──────────────────┐   │               │
-                     │   │ student_teachers │   │               │
-                     │   │                  │   │               │
-                     └───│ • student_id (FK)│   │               │
-                         │ • teacher_id (FK)│   │               │
-                         └──────────────────┘   │               │
-                                  │              │               │
-                                  │              │               ▼
-                                  │              │      ┌──────────────────┐
-                                  │              │      │ parent_students  │
-                                  │              │      │                  │
-                                  │              └──────│ • parent_id (FK) │
-                                  │                     │ • student_id (FK)│
-                                  ▼                     │ • relationship   │
-                         ┌──────────────────┐           │ • is_primary     │
-                         │     reports      │           └──────────────────┘
-                         │                  │                     │
-                         │ • id (PK)        │                     │
-                         │ • student_id (FK)│◄────────────────────┘
-                         │ • teacher_id (FK)│                     │
-                         │ • visible_to     │                     │
-                         │   _parents       │                     │
-                         └──────────────────┘                     │
-                                  │                                │
-                                  │                                ▼
-                                  │                       ┌──────────────────┐
-                                  │                       │  notifications   │
-                                  │                       │                  │
-                                  │                       │ • id (PK)        │
-                                  └───────────────────────│ • parent_id (FK) │
-                                                          │ • student_id (FK)│
-                                                          │ • type           │
-                                                          │ • is_read        │
-                                                          └──────────────────┘
-                                                                   │
-                                                                   ▼
-                                                          ┌──────────────────┐
-                                                          │  report_views    │
-                                                          │                  │
-                                                          │ • report_id (FK) │
-                                                          │ • parent_id (FK) │
-                                                          │ • viewed_at      │
-                                                          └──────────────────┘
-
-New Relationships:
-• parents (N) ←→ (N) students (via parent_students)
-• parents (1) ←→ (N) notifications
-• parents (1) ←→ (N) report_views
-• reports (1) ←→ (N) report_views
-```
-
----
-
-## 🔌 Parent Portal API Endpoints
-
-### Base URL: `/api/v1/parent`
+### Base URL: `/api/v1`
 
 ### Authentication
 
 ```
-POST   /parent/auth/register         # Parent self-registration (with invite code)
-POST   /parent/auth/login            # Parent login
-POST   /parent/auth/logout           # Logout
-POST   /parent/auth/refresh-token    # Refresh token
-GET    /parent/auth/me               # Get current parent info
-POST   /parent/auth/forgot-password  # Request password reset
-POST   /parent/auth/reset-password   # Reset password with token
-POST   /parent/auth/verify-email     # Verify email with token
+POST   /auth/login           # Teacher/Admin login
+POST   /auth/logout          # Logout
+POST   /auth/refresh-token   # Refresh JWT token
+GET    /auth/me              # Get current user
 ```
 
 ---
 
-### 1. **Parent Registration & Profile**
+### Students API
 
-#### Register Parent Account
+```
+GET    /students              # List all students (with filters)
+POST   /students              # Create new student
+GET    /students/:id          # Get student details
+PUT    /students/:id          # Update student
+DELETE /students/:id          # Delete student (soft)
+
+GET    /students/:id/goals    # Get student's goals
+POST   /students/:id/goals    # Assign goal to student
+PUT    /students/:id/goals/:goalId  # Update goal progress
+
+GET    /students/:id/reports  # Get student's reports
+GET    /students/:id/progress-chart  # Progress over time
+```
+
+**Example: List Students**
 
 ```http
-POST /parent/auth/register
-Content-Type: application/json
+GET /api/v1/students?page=1&limit=20&status=active&search=Hào
 
-Request Body:
+Response 200:
 {
-  "email": "parent@email.com",
-  "phone": "0901234567",
-  "password": "SecurePass123!",
-  "full_name": "Nguyễn Văn Phụ Huynh",
-  "relationship": "father", // 'mother', 'father', 'guardian', 'other'
-  "invite_code": "INVITE123", // Provided by admin/teacher
-  "student_code": "HS001" // Optional: Link to student during registration
+  "success": true,
+  "data": {
+    "students": [
+      {
+        "id": "uuid",
+        "student_code": "HS001",
+        "full_name": "Hào Hổ",
+        "date_of_birth": "2018-05-15",
+        "gender": "male",
+        "avatar_url": "https://...",
+        "status": "active",
+        "primary_teacher": {
+          "id": "uuid",
+          "full_name": "Nguyễn Văn Giáo Viên"
+        },
+        "statistics": {
+          "total_goals": 15,
+          "active_goals": 8,
+          "completed_goals": 7,
+          "avg_progress": 65
+        }
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 50,
+      "total_pages": 3
+    }
+  }
+}
+```
+
+---
+
+### Goals API
+
+```
+GET    /domains               # List all domains
+GET    /domains/:id/goals     # Goal templates in domain
+
+GET    /goal-templates        # List goal templates
+POST   /goal-templates        # Create custom template (admin)
+PUT    /goal-templates/:id    # Update template
+DELETE /goal-templates/:id    # Delete template
+
+GET    /tags                  # List all tags
+POST   /tags                  # Create tag (admin)
+```
+
+---
+
+### Reports API
+
+```
+GET    /reports               # List reports (by teacher)
+POST   /reports               # Create new report
+GET    /reports/:id           # Get report detail
+PUT    /reports/:id           # Update report
+DELETE /reports/:id           # Delete report
+POST   /reports/:id/submit    # Submit report (change status)
+```
+
+**Example: Create Report**
+
+```http
+POST /api/v1/reports
+Content-Type: application/json
+Authorization: Bearer <token>
+
+Request:
+{
+  "student_id": "uuid",
+  "session_date": "2024-10-20",
+  "session_duration": 60,
+  "rating": 4,
+  "participation_level": "high",
+  "notes": "Hào đã có tiến bộ rất tốt...",
+  "recommendations": "Tiếp tục thực hành tại nhà...",
+  "goals": [
+    {
+      "student_goal_id": "uuid",
+      "progress_recorded": 65,
+      "notes": "Đã làm tốt với hỗ trợ bằng lời nói",
+      "support_level": "verbal"
+    },
+    {
+      "student_goal_id": "uuid",
+      "progress_recorded": 40,
+      "notes": "Cần thêm thực hành",
+      "support_level": "physical"
+    }
+  ]
 }
 
 Response 201:
 {
   "success": true,
   "data": {
-    "parent": {
+    "report": {
       "id": "uuid",
-      "email": "parent@email.com",
-      "full_name": "Nguyễn Văn Phụ Huynh",
-      "is_verified": false
+      "student_id": "uuid",
+      "teacher_id": "uuid",
+      "session_date": "2024-10-20",
+      "rating": 4,
+      "status": "draft",
+      "goals_count": 2,
+      "created_at": "2024-10-20T15:00:00Z"
     },
-    "message": "Registration successful. Please check your email to verify your account.",
-    "verification_email_sent": true
-  }
-}
-
-Response 400:
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_INVITE_CODE",
-    "message": "The invite code is invalid or expired"
+    "message": "Report created successfully"
   }
 }
 ```
 
-#### Parent Login
+---
+
+## 🔌 API Endpoints - Parents
+
+### Base URL: `/api/v1/parent`
+
+### Authentication
+
+```
+POST   /parent/auth/register         # Parent registration
+POST   /parent/auth/login            # Parent login
+POST   /parent/auth/logout           # Logout
+GET    /parent/auth/me               # Get profile
+PUT    /parent/profile               # Update profile
+POST   /parent/auth/forgot-password  # Request reset
+```
+
+**Example: Parent Login**
 
 ```http
-POST /parent/auth/login
+POST /api/v1/parent/auth/login
 Content-Type: application/json
 
-Request Body:
+Request:
 {
-  "email": "parent@email.com",
+  "email": "parent1@email.com",
   "password": "SecurePass123!"
 }
 
@@ -455,125 +907,31 @@ Response 200:
     "expires_in": 3600,
     "parent": {
       "id": "uuid",
-      "email": "parent@email.com",
+      "email": "parent1@email.com",
       "full_name": "Nguyễn Văn Phụ Huynh",
-      "avatar_url": "https://...",
       "children_count": 2,
       "unread_notifications": 3
     }
-  }
-}
-
-Response 401:
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_CREDENTIALS",
-    "message": "Email or password is incorrect"
-  }
-}
-
-Response 423:
-{
-  "success": false,
-  "error": {
-    "code": "ACCOUNT_LOCKED",
-    "message": "Account is temporarily locked due to multiple failed login attempts",
-    "locked_until": "2024-10-21T15:30:00Z"
-  }
-}
-```
-
-#### Get Parent Profile
-
-```http
-GET /parent/auth/me
-Authorization: Bearer <token>
-
-Response 200:
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "email": "parent@email.com",
-    "phone": "0901234567",
-    "full_name": "Nguyễn Văn Phụ Huynh",
-    "relationship": "father",
-    "avatar_url": "https://...",
-    "address": "123 Street, City",
-    "is_verified": true,
-    "email_verified_at": "2024-01-15T10:00:00Z",
-    "language": "vi",
-    "timezone": "Asia/Ho_Chi_Minh",
-    "notification_preferences": {
-      "email": true,
-      "sms": false,
-      "push": true
-    },
-    "children": [
-      {
-        "id": "uuid",
-        "student_code": "HS001",
-        "full_name": "Hào Hổ",
-        "date_of_birth": "2018-05-15",
-        "avatar_url": "https://...",
-        "relationship": "son",
-        "is_primary_contact": true,
-        "unread_reports": 2
-      }
-    ],
-    "statistics": {
-      "total_children": 2,
-      "total_reports": 45,
-      "unread_notifications": 3
-    },
-    "created_at": "2024-01-01T00:00:00Z",
-    "last_login_at": "2024-10-21T08:00:00Z"
-  }
-}
-```
-
-#### Update Parent Profile
-
-```http
-PUT /parent/profile
-Authorization: Bearer <token>
-Content-Type: application/json
-
-Request Body:
-{
-  "full_name": "Updated Name",
-  "phone": "0909999999",
-  "address": "New Address",
-  "notification_preferences": {
-    "email": true,
-    "sms": true,
-    "push": true
-  },
-  "language": "en"
-}
-
-Response 200:
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "full_name": "Updated Name",
-    // ... updated fields
-    "updated_at": "2024-10-21T10:00:00Z"
   }
 }
 ```
 
 ---
 
-### 2. **Children (Students) Access**
+### Children & Reports
 
-#### Get My Children
+```
+GET    /parent/children              # List my children
+GET    /parent/children/:id          # Child details
+GET    /parent/children/:id/reports  # Child's reports
+GET    /parent/children/:id/goals    # Child's goals
+```
+
+**Example: Get My Children**
 
 ```http
-GET /parent/children
-Authorization: Bearer <token>
+GET /api/v1/parent/children
+Authorization: Bearer <parent_token>
 
 Response 200:
 {
@@ -586,179 +944,38 @@ Response 200:
         "full_name": "Hào Hổ",
         "date_of_birth": "2018-05-15",
         "age": 6,
-        "gender": "male",
         "avatar_url": "https://...",
-        "diagnosis": "Autism Spectrum Disorder",
-        "enrollment_date": "2020-09-01",
-        "status": "active",
         "primary_teacher": {
-          "id": "uuid",
-          "full_name": "Teacher Name",
-          "email": "teacher@email.com",
+          "full_name": "Nguyễn Văn Giáo Viên",
           "phone": "0903456789"
         },
         "statistics": {
-          "total_goals": 20,
+          "total_goals": 15,
           "active_goals": 8,
-          "completed_goals": 12,
           "total_reports": 45,
-          "latest_report_date": "2024-10-20",
-          "avg_rating": 4.2,
-          "unread_reports": 2
-        },
-        "relationship": "son",
-        "is_primary_contact": true
+          "unread_reports": 2,
+          "avg_rating": 4.2
+        }
       }
     ]
   }
 }
 ```
 
-#### Get Child Details
-
-```http
-GET /parent/children/:studentId
-Authorization: Bearer <token>
-
-Response 200:
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "student_code": "HS001",
-    "full_name": "Hào Hổ",
-    "date_of_birth": "2018-05-15",
-    "age": 6,
-    "gender": "male",
-    "avatar_url": "https://...",
-    "diagnosis": "Autism Spectrum Disorder",
-    "diagnosis_date": "2019-01-01",
-    "enrollment_date": "2020-09-01",
-    "status": "active",
-    "primary_teacher": {
-      "id": "uuid",
-      "full_name": "Teacher Name",
-      "email": "teacher@email.com",
-      "phone": "0903456789",
-      "avatar_url": "https://..."
-    },
-    "all_teachers": [
-      {
-        "id": "uuid",
-        "full_name": "Teacher 1",
-        "role": "primary"
-      },
-      {
-        "id": "uuid",
-        "full_name": "Teacher 2",
-        "role": "assistant"
-      }
-    ],
-    "active_goals": [
-      {
-        "id": "uuid",
-        "description": "Child can imitate 3 play actions...",
-        "domain": {
-          "name": "Imitation",
-          "color": "#FF6B6B"
-        },
-        "current_progress": 65,
-        "target_progress": 80,
-        "status": "in_progress",
-        "start_date": "2024-01-01"
-      }
-    ],
-    "recent_achievements": [
-      {
-        "goal": "Can say 10 words independently",
-        "completed_date": "2024-10-15",
-        "progress": 100
-      }
-    ],
-    "statistics": {
-      "total_goals": 20,
-      "active_goals": 8,
-      "completed_goals": 12,
-      "completion_rate": 60,
-      "total_reports": 45,
-      "avg_rating": 4.2,
-      "last_session_date": "2024-10-20"
-    }
-  }
-}
-
-Response 403:
-{
-  "success": false,
-  "error": {
-    "code": "ACCESS_DENIED",
-    "message": "You don't have permission to view this student's information"
-  }
-}
-```
-
 ---
 
-### 3. **Reports Access**
+### Reports Access
 
-#### Get Reports for My Child
-
-```http
-GET /parent/children/:studentId/reports
-Authorization: Bearer <token>
-Query Parameters:
-  - page: int (default: 1)
-  - limit: int (default: 20)
-  - date_from: date (YYYY-MM-DD)
-  - date_to: date (YYYY-MM-DD)
-  - sort_by: string (session_date, rating)
-  - sort_order: string (asc, desc)
-
-Response 200:
-{
-  "success": true,
-  "data": {
-    "reports": [
-      {
-        "id": "uuid",
-        "session_date": "2024-10-20",
-        "session_duration": 60,
-        "rating": 4,
-        "participation_level": "high",
-        "teacher": {
-          "full_name": "Teacher Name",
-          "avatar_url": "https://..."
-        },
-        "goals_count": 5,
-        "avg_progress": 68,
-        "has_notes": true,
-        "is_viewed": true,
-        "viewed_at": "2024-10-21T08:30:00Z",
-        "created_at": "2024-10-20T15:00:00Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 20,
-      "total": 45,
-      "total_pages": 3
-    },
-    "statistics": {
-      "total_reports": 45,
-      "unread_reports": 2,
-      "avg_rating": 4.2,
-      "highest_rating": 5,
-      "lowest_rating": 3
-    }
-  }
-}
+```
+GET    /parent/reports/:id           # Get report details
+GET    /parent/reports/:id/pdf       # Export as PDF
 ```
 
-#### Get Report Details
+**Example: Get Report**
 
 ```http
-GET /parent/reports/:reportId
-Authorization: Bearer <token>
+GET /api/v1/parent/reports/uuid
+Authorization: Bearer <parent_token>
 
 Response 200:
 {
@@ -766,320 +983,54 @@ Response 200:
   "data": {
     "id": "uuid",
     "student": {
-      "id": "uuid",
       "full_name": "Hào Hổ",
-      "student_code": "HS001",
-      "avatar_url": "https://..."
+      "student_code": "HS001"
     },
     "teacher": {
-      "id": "uuid",
-      "full_name": "Teacher Name",
-      "email": "teacher@email.com",
-      "phone": "0903456789",
-      "avatar_url": "https://..."
+      "full_name": "Nguyễn Văn Giáo Viên"
     },
     "session_date": "2024-10-20",
-    "session_duration": 60,
     "rating": 4,
-    "participation_level": "high",
-    "notes": "Hào đã có tiến bộ rất tốt trong buổi học hôm nay. Em đã có thể tự làm được 3/5 động tác bắt chước mà không cần hỗ trợ.",
-    "recommendations": "Tiếp tục thực hành các động tác bắt chước tại nhà. Phụ huynh có thể chơi cùng con với búp bê hoặc gấu bông.",
+    "notes": "Hào đã có tiến bộ rất tốt...",
     "goals": [
       {
-        "id": "uuid",
-        "description": "Child can imitate 3 play actions with a doll",
-        "domain": {
-          "name": "Imitation",
-          "color": "#FF6B6B"
-        },
-        "previous_progress": 60,
+        "description": "Child can imitate 3 play actions...",
+        "domain": "Imitation",
         "progress_recorded": 65,
-        "progress_change": 5,
-        "target_progress": 80,
-        "notes": "Em đã làm tốt hơn với hỗ trợ bằng lời nói",
-        "support_level": "verbal"
-      },
-      {
-        "id": "uuid",
-        "description": "Different types of cries for different types of discomfort",
-        "domain": {
-          "name": "Expressive Language",
-          "color": "#4ECDC4"
-        },
-        "previous_progress": 35,
-        "progress_recorded": 40,
-        "progress_change": 5,
-        "target_progress": 70,
-        "notes": "Đã có thể phân biệt 2 loại tiếng khóc",
-        "support_level": "modeling"
+        "previous_progress": 60,
+        "progress_change": 5
       }
     ],
     "is_viewed": true,
-    "viewed_at": "2024-10-21T08:30:00Z",
-    "created_at": "2024-10-20T15:00:00Z"
-  }
-}
-
-Response 403:
-{
-  "success": false,
-  "error": {
-    "code": "REPORT_ACCESS_DENIED",
-    "message": "You don't have permission to view this report"
-  }
-}
-```
-
-#### Export Report as PDF
-
-```http
-GET /parent/reports/:reportId/export/pdf
-Authorization: Bearer <token>
-
-Response 200:
-Content-Type: application/pdf
-Content-Disposition: attachment; filename="report_HS001_2024-10-20.pdf"
-
-[PDF Binary Data]
-
-Response 403:
-{
-  "success": false,
-  "error": {
-    "code": "REPORT_ACCESS_DENIED",
-    "message": "You don't have permission to export this report"
+    "viewed_at": "2024-10-21T08:00:00Z"
   }
 }
 ```
 
 ---
 
-### 4. **Goals & Progress Tracking**
+### Notifications
 
-#### Get Child's Goals
-
-```http
-GET /parent/children/:studentId/goals
-Authorization: Bearer <token>
-Query Parameters:
-  - status: string (in_progress, completed, not_started)
-  - domain_id: uuid
-
-Response 200:
-{
-  "success": true,
-  "data": {
-    "goals": [
-      {
-        "id": "uuid",
-        "description": "Child can imitate 3 play actions...",
-        "domain": {
-          "id": "uuid",
-          "name": "Imitation",
-          "color": "#FF6B6B",
-          "icon": "copy"
-        },
-        "current_progress": 65,
-        "target_progress": 80,
-        "progress_percentage": 81.25, // (65/80) * 100
-        "status": "in_progress",
-        "start_date": "2024-01-01",
-        "target_end_date": "2024-06-01",
-        "days_remaining": 42,
-        "recent_progress": [
-          {
-            "date": "2024-10-20",
-            "progress": 65,
-            "change": 5
-          },
-          {
-            "date": "2024-10-13",
-            "progress": 60,
-            "change": 3
-          }
-        ],
-        "tags": [
-          {
-            "name": "Repeated goal",
-            "color": "#95A5A6"
-          }
-        ]
-      }
-    ],
-    "summary": {
-      "total": 20,
-      "in_progress": 8,
-      "completed": 12,
-      "not_started": 0,
-      "overall_progress": 73.5
-    }
-  }
-}
 ```
-
-#### Get Goal Progress History
-
-```http
-GET /parent/goals/:goalId/progress-history
-Authorization: Bearer <token>
-
-Response 200:
-{
-  "success": true,
-  "data": {
-    "goal": {
-      "id": "uuid",
-      "description": "Child can imitate 3 play actions...",
-      "target_progress": 80,
-      "current_progress": 65
-    },
-    "history": [
-      {
-        "date": "2024-10-20",
-        "progress": 65,
-        "change": 5,
-        "report_id": "uuid",
-        "teacher": "Teacher Name",
-        "notes": "Good progress with verbal prompts"
-      },
-      {
-        "date": "2024-10-13",
-        "progress": 60,
-        "change": 3,
-        "report_id": "uuid",
-        "teacher": "Teacher Name",
-        "notes": "Steady improvement"
-      }
-    ],
-    "statistics": {
-      "avg_weekly_progress": 2.5,
-      "total_sessions": 12,
-      "estimated_completion_date": "2024-11-15"
-    }
-  }
-}
+GET    /parent/notifications         # List notifications
+PUT    /parent/notifications/:id/read  # Mark as read
+PUT    /parent/notifications/mark-all-read
+DELETE /parent/notifications/:id     # Delete notification
 ```
 
 ---
 
-### 5. **Notifications**
+### Dashboard
 
-#### Get Notifications
-
-```http
-GET /parent/notifications
-Authorization: Bearer <token>
-Query Parameters:
-  - type: string (new_report, goal_completed, announcement)
-  - is_read: boolean
-  - page: int
-  - limit: int
-
-Response 200:
-{
-  "success": true,
-  "data": {
-    "notifications": [
-      {
-        "id": "uuid",
-        "type": "new_report",
-        "title": "Báo cáo buổi học mới",
-        "message": "Giáo viên vừa tạo báo cáo cho buổi học ngày 20/10/2024",
-        "student": {
-          "id": "uuid",
-          "full_name": "Hào Hổ",
-          "avatar_url": "https://..."
-        },
-        "related_entity_type": "report",
-        "related_entity_id": "uuid",
-        "priority": "normal",
-        "is_read": false,
-        "created_at": "2024-10-20T15:05:00Z"
-      },
-      {
-        "id": "uuid",
-        "type": "goal_completed",
-        "title": "Hoàn thành mục tiêu",
-        "message": "Con đã hoàn thành mục tiêu 'Can say 10 words independently'",
-        "student": {
-          "id": "uuid",
-          "full_name": "Hào Hổ",
-          "avatar_url": "https://..."
-        },
-        "related_entity_type": "goal",
-        "related_entity_id": "uuid",
-        "priority": "high",
-        "is_read": true,
-        "read_at": "2024-10-21T08:00:00Z",
-        "created_at": "2024-10-15T14:30:00Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 20,
-      "total": 50,
-      "total_pages": 3
-    },
-    "unread_count": 3
-  }
-}
+```
+GET    /parent/dashboard             # Summary statistics
 ```
 
-#### Mark Notification as Read
+**Example: Dashboard**
 
 ```http
-PUT /parent/notifications/:notificationId/read
-Authorization: Bearer <token>
-
-Response 200:
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "is_read": true,
-    "read_at": "2024-10-21T10:00:00Z"
-  }
-}
-```
-
-#### Mark All Notifications as Read
-
-```http
-PUT /parent/notifications/mark-all-read
-Authorization: Bearer <token>
-
-Response 200:
-{
-  "success": true,
-  "data": {
-    "marked_count": 5,
-    "message": "All notifications marked as read"
-  }
-}
-```
-
-#### Delete Notification
-
-```http
-DELETE /parent/notifications/:notificationId
-Authorization: Bearer <token>
-
-Response 200:
-{
-  "success": true,
-  "message": "Notification deleted successfully"
-}
-```
-
----
-
-### 6. **Statistics & Dashboard**
-
-#### Get Dashboard Summary
-
-```http
-GET /parent/dashboard
-Authorization: Bearer <token>
+GET /api/v1/parent/dashboard
+Authorization: Bearer <parent_token>
 
 Response 200:
 {
@@ -1089,13 +1040,10 @@ Response 200:
       "total_children": 2,
       "total_reports": 45,
       "unread_reports": 2,
-      "unread_notifications": 3,
-      "active_goals": 16,
-      "completed_goals_this_month": 3
+      "unread_notifications": 3
     },
     "recent_reports": [
       {
-        "id": "uuid",
         "student_name": "Hào Hổ",
         "session_date": "2024-10-20",
         "rating": 4,
@@ -1108,596 +1056,277 @@ Response 200:
         "goal": "Can say 10 words independently",
         "completed_date": "2024-10-15"
       }
-    ],
-    "upcoming_milestones": [
-      {
-        "student_name": "Hào Hổ",
-        "goal": "Child can imitate 3 play actions...",
-        "current_progress": 65,
-        "target_progress": 80,
-        "estimated_completion": "2024-11-15"
-      }
-    ],
-    "progress_trends": {
-      "this_month": {
-        "reports_count": 8,
-        "avg_rating": 4.2,
-        "avg_progress_improvement": 5.3
-      },
-      "last_month": {
-        "reports_count": 10,
-        "avg_rating": 4.0,
-        "avg_progress_improvement": 4.8
-      }
-    }
+    ]
   }
 }
 ```
 
 ---
 
-## 🔒 Security & Access Control
+## 🔒 Data Validation & Security
 
-### 1. Parent Authentication Flow
+### Authentication & Authorization
 
-```javascript
-// middleware/parentAuth.js
-const parentAuthMiddleware = async (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.split(" ")[1];
+**JWT Token Structure:**
 
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        error: { code: "UNAUTHORIZED", message: "Authentication required" },
-      });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Verify it's a parent token
-    if (decoded.type !== "parent") {
-      return res.status(403).json({
-        success: false,
-        error: { code: "FORBIDDEN", message: "Parent access only" },
-      });
-    }
-
-    // Get parent from database
-    const parent = await db.query(
-      "SELECT * FROM parents WHERE id = ? AND is_active = true",
-      [decoded.id]
-    );
-
-    if (!parent) {
-      return res.status(401).json({
-        success: false,
-        error: {
-          code: "PARENT_NOT_FOUND",
-          message: "Parent account not found",
-        },
-      });
-    }
-
-    req.parent = parent;
-    next();
-  } catch (error) {
-    return res.status(401).json({
-      success: false,
-      error: { code: "INVALID_TOKEN", message: "Invalid or expired token" },
-    });
-  }
-};
+```json
+{
+  "id": "user-uuid",
+  "email": "user@email.com",
+  "role": "teacher", // or "admin" or "parent"
+  "type": "teacher", // or "parent"
+  "iat": 1698000000,
+  "exp": 1698003600
+}
 ```
 
-### 2. Student Access Control
+**Middleware:**
 
 ```javascript
-// middleware/verifyStudentAccess.js
-const verifyStudentAccess = async (req, res, next) => {
+// Teacher/Admin authentication
+const authMiddleware = async (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+  if (decoded.type !== "teacher") {
+    return res.status(403).json({ error: "Teacher access only" });
+  }
+
+  req.user = await User.findById(decoded.id);
+  next();
+};
+
+// Parent authentication
+const parentAuthMiddleware = async (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+  if (decoded.type !== "parent") {
+    return res.status(403).json({ error: "Parent access only" });
+  }
+
+  req.parent = await Parent.findById(decoded.id);
+  next();
+};
+
+// Access control for parents
+const verifyParentAccess = async (req, res, next) => {
   const { studentId } = req.params;
   const { parent } = req;
 
-  // Check if parent has access to this student
   const hasAccess = await db.query(
-    `SELECT 1 FROM parent_students 
-     WHERE parent_id = ? AND student_id = ?`,
+    "SELECT 1 FROM parent_students WHERE parent_id = ? AND student_id = ?",
     [parent.id, studentId]
   );
 
   if (!hasAccess) {
-    return res.status(403).json({
-      success: false,
-      error: {
-        code: "ACCESS_DENIED",
-        message:
-          "You don't have permission to access this student's information",
-      },
-    });
-  }
-
-  next();
-};
-
-// Usage:
-app.get(
-  "/parent/children/:studentId",
-  parentAuthMiddleware,
-  verifyStudentAccess,
-  getChildDetails
-);
-```
-
-### 3. Report Access Control
-
-```javascript
-// middleware/verifyReportAccess.js
-const verifyReportAccess = async (req, res, next) => {
-  const { reportId } = req.params;
-  const { parent } = req;
-
-  // Check if parent has access to the student of this report
-  const hasAccess = await db.query(
-    `SELECT 1 FROM reports r
-     JOIN parent_students ps ON r.student_id = ps.student_id
-     WHERE r.id = ? 
-       AND ps.parent_id = ?
-       AND r.visible_to_parents = true
-       AND ps.can_view_reports = true`,
-    [reportId, parent.id]
-  );
-
-  if (!hasAccess) {
-    return res.status(403).json({
-      success: false,
-      error: {
-        code: "REPORT_ACCESS_DENIED",
-        message: "You don't have permission to view this report",
-      },
-    });
+    return res.status(403).json({ error: "Access denied" });
   }
 
   next();
 };
 ```
 
-### 4. Invite Code System
+---
 
-```sql
--- New table for invite codes
-CREATE TABLE parent_invite_codes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code VARCHAR(20) UNIQUE NOT NULL,
-  student_id UUID,
-  created_by UUID NOT NULL, -- Teacher/Admin who created
-  max_uses INT DEFAULT 1,
-  used_count INT DEFAULT 0,
-  expires_at TIMESTAMP NOT NULL,
-  is_active BOOLEAN DEFAULT true,
+### Data Validation
 
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-  FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
-
-  INDEX idx_code (code),
-  INDEX idx_expires_at (expires_at)
-);
-
--- Generate invite code
-INSERT INTO parent_invite_codes (code, student_id, created_by, expires_at)
-VALUES ('INVITE123', 'student-uuid', 'teacher-uuid', NOW() + INTERVAL 7 DAY);
-```
+**Student Validation:**
 
 ```javascript
-// Verify invite code during registration
-const verifyInviteCode = async (code, studentCode) => {
-  const invite = await db.query(
-    `SELECT pic.*, s.student_code 
-     FROM parent_invite_codes pic
-     LEFT JOIN students s ON pic.student_id = s.id
-     WHERE pic.code = ?
-       AND pic.is_active = true
-       AND pic.expires_at > NOW()
-       AND pic.used_count < pic.max_uses`,
-    [code]
-  );
+const studentSchema = {
+  student_code: {
+    type: "string",
+    required: true,
+    pattern: /^HS\d{3,6}$/, // HS001, HS002, etc.
+    unique: true,
+  },
+  full_name: {
+    type: "string",
+    required: true,
+    min: 2,
+    max: 255,
+  },
+  date_of_birth: {
+    type: "date",
+    required: true,
+    max: new Date(), // Cannot be future date
+  },
+  parent_phone: {
+    type: "string",
+    required: true,
+    pattern: /^0\d{9,10}$/, // Vietnamese phone
+  },
+  parent_email: {
+    type: "email",
+    optional: true,
+  },
+};
+```
 
-  if (!invite) {
-    throw new Error("Invalid or expired invite code");
-  }
+**Report Validation:**
 
-  if (studentCode && invite.student_code !== studentCode) {
-    throw new Error("Invite code does not match student");
-  }
-
-  return invite;
+```javascript
+const reportSchema = {
+  student_id: {
+    type: "uuid",
+    required: true,
+    exists: "students.id",
+  },
+  session_date: {
+    type: "date",
+    required: true,
+    max: new Date(), // Cannot be future
+  },
+  rating: {
+    type: "integer",
+    required: true,
+    min: 1,
+    max: 5,
+  },
+  goals: {
+    type: "array",
+    required: true,
+    min: 1, // At least 1 goal
+    items: {
+      student_goal_id: "uuid",
+      progress_recorded: { type: "integer", min: 0, max: 100 },
+    },
+  },
 };
 ```
 
 ---
 
-## 📱 Mobile App Features
+### Security Best Practices
 
-### Parent Mobile App Screens
+1. **Password Security**
 
-#### 1. **Authentication**
+   - Hash with bcrypt (cost factor 10)
+   - Minimum 8 characters
+   - Require uppercase, lowercase, number
 
-- 📱 Login screen
-- 📱 Register with invite code
-- 📱 Forgot password
-- 📱 Email/Phone verification
+2. **Rate Limiting**
 
-#### 2. **Dashboard**
+   - Login: 5 attempts per 15 minutes
+   - API calls: 100 requests per minute
 
-- 📊 Summary statistics
-- 🔔 Unread notifications badge
-- 📈 Recent reports
-- 🎯 Recent achievements
-- 📅 Upcoming sessions (if scheduled)
+3. **Input Sanitization**
 
-#### 3. **Children List**
+   - Escape HTML in text fields
+   - Validate UUIDs
+   - SQL injection prevention (use parameterized queries)
 
-- 👶 List of all children
-- 📸 Avatar, name, age
-- 📊 Quick stats (active goals, recent rating)
-- 🔔 Unread reports indicator
+4. **Access Control**
 
-#### 4. **Child Detail**
+   - Teachers: Can only view/edit assigned students
+   - Parents: Can only view their own children
+   - Admin: Full access
 
-- 📋 Full profile
-- 👨‍🏫 Assigned teachers with contact info
-- 🎯 Active goals with progress bars
-- 📊 Statistics & charts
-- 🏆 Achievements/Milestones
-
-#### 5. **Reports List**
-
-- 📄 List of all reports for a child
-- 🗓️ Filter by date range
-- ⭐ Rating display
-- 👁️ Read/Unread indicator
-- 🔍 Search functionality
-
-#### 6. **Report Detail**
-
-- 📝 Full report content
-- ⭐ Rating & participation level
-- 🎯 Goals with progress
-- 📈 Progress charts (before vs after)
-- 💬 Teacher notes & recommendations
-- 📥 Download PDF option
-- ✉️ Share via email
-
-#### 7. **Goals & Progress**
-
-- 📋 List of all goals by domain
-- 📊 Progress bars with percentages
-- 📈 Progress history chart
-- 🔔 Milestone notifications
-- 🏆 Completed goals celebration
-
-#### 8. **Notifications**
-
-- 🔔 Notification center
-- 📨 Push notifications
-- ✉️ Email notifications
-- 📱 SMS notifications (optional)
-- 🔕 Notification preferences
-
-#### 9. **Profile & Settings**
-
-- 👤 Edit profile
-- 📸 Update avatar
-- 🔐 Change password
-- 🌐 Language selection
-- 🔔 Notification settings
-- 🌓 Theme (light/dark mode)
+5. **Audit Trail**
+   - Log all create/update/delete operations
+   - Log login attempts
+   - Store IP address and user agent
 
 ---
 
-## 🛠️ Implementation Guide
+## 🚀 Implementation Roadmap
 
-### Phase 1: Database Setup (Week 1)
+### Phase 1: Core System (Weeks 1-4)
 
-```sql
--- Step 1: Create new tables
-CREATE TABLE parents...
-CREATE TABLE parent_students...
-CREATE TABLE notifications...
-CREATE TABLE report_views...
-CREATE TABLE parent_invite_codes...
+**Week 1: Database & Authentication**
 
--- Step 2: Alter existing tables
-ALTER TABLE students ADD COLUMN parent_portal_enabled...
-ALTER TABLE reports ADD COLUMN visible_to_parents...
+- [ ] Create all 15 tables
+- [ ] Seed initial data (domains, tags, users)
+- [ ] Implement JWT authentication for teachers
+- [ ] Create login/logout endpoints
 
--- Step 3: Create indexes for performance
-CREATE INDEX idx_parent_email ON parents(email);
-CREATE INDEX idx_notification_parent ON notifications(parent_id, is_read);
+**Week 2: Student & Goal Management**
 
--- Step 4: Seed test data
-INSERT INTO parents...
-INSERT INTO parent_students...
-```
+- [ ] Student CRUD APIs
+- [ ] Goal templates management
+- [ ] Assign goals to students
+- [ ] Student-teacher relationships
 
-### Phase 2: Backend API (Week 2-3)
+**Week 3: Reports System**
 
-```bash
-# Project structure
-backend/
-├── routes/
-│   └── parent/
-│       ├── auth.js          # Authentication endpoints
-│       ├── children.js      # Children access
-│       ├── reports.js       # Report viewing
-│       ├── goals.js         # Goals tracking
-│       ├── notifications.js # Notifications
-│       └── dashboard.js     # Dashboard data
-├── middleware/
-│   ├── parentAuth.js        # Parent authentication
-│   ├── verifyStudentAccess.js
-│   └── verifyReportAccess.js
-├── services/
-│   ├── parentService.js
-│   ├── notificationService.js
-│   └── pdfExportService.js
-└── utils/
-    ├── inviteCodeGenerator.js
-    └── emailService.js
-```
+- [ ] Create report API
+- [ ] Report CRUD operations
+- [ ] Track goal progress in reports
+- [ ] Report list/filter/search
 
-### Phase 3: Admin Tools (Week 3)
+**Week 4: Testing & Admin Tools**
 
-**Admin Dashboard Features:**
-
-1. **Parent Management**
-
-   ```http
-   GET    /admin/parents              # List all parents
-   POST   /admin/parents              # Create parent account
-   PUT    /admin/parents/:id          # Update parent
-   DELETE /admin/parents/:id          # Delete parent (soft)
-   POST   /admin/parents/:id/reset-password  # Reset password
-   ```
-
-2. **Invite Code Management**
-
-   ```http
-   GET    /admin/invite-codes         # List all codes
-   POST   /admin/invite-codes         # Generate code
-   DELETE /admin/invite-codes/:id     # Revoke code
-   ```
-
-3. **Link Parent to Student**
-   ```http
-   POST   /admin/students/:studentId/parents
-   DELETE /admin/students/:studentId/parents/:parentId
-   ```
-
-### Phase 4: Notification System (Week 4)
-
-```javascript
-// services/notificationService.js
-class NotificationService {
-  // Send notification when new report is created
-  async notifyNewReport(reportId) {
-    const report = await getReport(reportId);
-    const parents = await getParentsForStudent(report.student_id);
-
-    for (const parent of parents) {
-      if (parent.can_receive_notifications) {
-        await this.createNotification({
-          parent_id: parent.id,
-          student_id: report.student_id,
-          type: 'new_report',
-          title: 'Báo cáo buổi học mới',
-          message: `Giáo viên vừa tạo báo cáo cho buổi học ngày ${report.session_date}`,
-          related_entity_type: 'report',
-          related_entity_id: reportId,
-          channels: parent.notification_preferences
-        });
-
-        // Send via channels
-        if (parent.notification_preferences.email) {
-          await this.sendEmail(parent.email, ...);
-        }
-        if (parent.notification_preferences.push) {
-          await this.sendPushNotification(parent.device_token, ...);
-        }
-      }
-    }
-  }
-
-  // Send notification when goal is completed
-  async notifyGoalCompleted(goalId) {
-    // Similar logic
-  }
-}
-```
-
-### Phase 5: Mobile App Integration (Week 5-8)
-
-**React Native App Structure:**
-
-```typescript
-// App structure
-app/
-├── (auth)/
-│   ├── login.tsx
-│   ├── register.tsx
-│   └── forgot-password.tsx
-├── (parent)/
-│   ├── _layout.tsx
-│   ├── dashboard.tsx
-│   ├── children/
-│   │   ├── index.tsx           # List children
-│   │   └── [id].tsx            # Child detail
-│   ├── reports/
-│   │   ├── index.tsx           # List reports
-│   │   └── [id].tsx            # Report detail
-│   ├── notifications.tsx
-│   └── profile.tsx
-└── providers/
-    ├── AuthProvider.tsx        # Parent auth
-    └── NotificationProvider.tsx
-```
-
-**Key Features:**
-
-1. **Push Notifications** (Expo Notifications)
-
-   ```typescript
-   import * as Notifications from "expo-notifications";
-
-   // Register for push notifications
-   const registerForPushNotifications = async () => {
-     const { status } = await Notifications.requestPermissionsAsync();
-     if (status !== "granted") return;
-
-     const token = await Notifications.getExpoPushTokenAsync();
-     // Send token to backend
-     await api.post("/parent/device-token", { token });
-   };
-   ```
-
-2. **Offline Support** (AsyncStorage)
-
-   ```typescript
-   // Cache reports for offline viewing
-   await AsyncStorage.setItem(`reports_${studentId}`, JSON.stringify(reports));
-   ```
-
-3. **Charts & Visualizations** (react-native-chart-kit)
-   ```typescript
-   <LineChart
-     data={progressData}
-     width={Dimensions.get("window").width - 32}
-     height={220}
-     chartConfig={chartConfig}
-   />
-   ```
+- [ ] Unit tests for core APIs
+- [ ] Admin dashboard for user management
+- [ ] Data validation
+- [ ] Error handling
 
 ---
 
-## 📊 Sample Queries
+### Phase 2: Parent Portal (Weeks 5-8)
 
-### Get all students for a parent with statistics
+**Week 5: Parent Authentication**
 
-```sql
-SELECT
-  s.id,
-  s.student_code,
-  s.full_name,
-  s.date_of_birth,
-  s.avatar_url,
-  ps.relationship,
-  ps.is_primary,
-  COUNT(DISTINCT sg.id) as total_goals,
-  COUNT(DISTINCT CASE WHEN sg.status = 'in_progress' THEN sg.id END) as active_goals,
-  COUNT(DISTINCT CASE WHEN sg.status = 'completed' THEN sg.id END) as completed_goals,
-  COUNT(DISTINCT r.id) as total_reports,
-  COUNT(DISTINCT CASE WHEN rv.parent_id IS NULL THEN r.id END) as unread_reports,
-  AVG(r.rating) as avg_rating
-FROM parent_students ps
-JOIN students s ON ps.student_id = s.id
-LEFT JOIN student_goals sg ON s.id = sg.student_id
-LEFT JOIN reports r ON s.id = r.student_id AND r.visible_to_parents = true
-LEFT JOIN report_views rv ON r.id = rv.report_id AND rv.parent_id = ps.parent_id
-WHERE ps.parent_id = ?
-GROUP BY s.id;
-```
+- [ ] Create parent tables
+- [ ] Parent registration/login
+- [ ] Link parents to students
+- [ ] Parent profile management
 
-### Get reports for parent with view status
+**Week 6: Parent Access to Data**
 
-```sql
-SELECT
-  r.*,
-  s.full_name as student_name,
-  s.student_code,
-  u.full_name as teacher_name,
-  COUNT(DISTINCT rg.id) as goals_count,
-  AVG(rg.progress_recorded) as avg_progress,
-  MAX(rv.viewed_at) as viewed_at,
-  CASE WHEN rv.id IS NOT NULL THEN true ELSE false END as is_viewed
-FROM reports r
-JOIN students s ON r.student_id = s.id
-JOIN users u ON r.teacher_id = u.id
-JOIN parent_students ps ON s.id = ps.student_id
-LEFT JOIN report_goals rg ON r.id = rg.report_id
-LEFT JOIN report_views rv ON r.id = rv.report_id AND rv.parent_id = ps.parent_id
-WHERE ps.parent_id = ?
-  AND ps.can_view_reports = true
-  AND r.visible_to_parents = true
-GROUP BY r.id
-ORDER BY r.session_date DESC;
-```
+- [ ] View children list
+- [ ] View child details
+- [ ] View reports list
+- [ ] View report details
+- [ ] Access control middleware
+
+**Week 7: Notifications System**
+
+- [ ] Create notifications table
+- [ ] Auto-notify on new report
+- [ ] Auto-notify on goal completion
+- [ ] Email integration (SendGrid)
+- [ ] Push notifications (Expo)
+
+**Week 8: Parent Features**
+
+- [ ] Dashboard for parents
+- [ ] PDF export for reports
+- [ ] Progress charts
+- [ ] Report views tracking
+- [ ] Mobile app integration
 
 ---
 
-## 🔐 Privacy & Data Protection
+### Phase 3: Advanced Features (Weeks 9-12)
 
-### GDPR Compliance
+**Week 9: Analytics & Reporting**
 
-1. **Data Access**: Parents can request all their data
-2. **Data Export**: Export all reports as PDF
-3. **Data Deletion**: Parent can request account deletion
-4. **Consent Management**: Clear consent for notifications
+- [ ] Teacher dashboard with statistics
+- [ ] Student progress charts
+- [ ] Goal completion trends
+- [ ] Report generation
 
-### Implementation
+**Week 10: Communication**
 
-```sql
--- Audit log for data access
-CREATE TABLE parent_data_access_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  parent_id UUID NOT NULL,
-  access_type VARCHAR(50) NOT NULL, -- 'view', 'export', 'delete_request'
-  entity_type VARCHAR(50),
-  entity_id UUID,
-  ip_address VARCHAR(45),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+- [ ] Messaging between teachers and parents
+- [ ] Announcements system
+- [ ] Meeting scheduler
 
-  FOREIGN KEY (parent_id) REFERENCES parents(id) ON DELETE CASCADE,
-  INDEX idx_parent (parent_id),
-  INDEX idx_created_at (created_at)
-);
-```
+**Week 11: Mobile App**
 
----
-
-## 🎯 Next Steps
-
-### Week 1: Database & Backend Setup
-
-- [ ] Create parent, parent_students, notifications tables
-- [ ] Alter students and reports tables
-- [ ] Seed test data
-- [ ] Test database queries
-
-### Week 2-3: API Development
-
-- [ ] Parent authentication endpoints
-- [ ] Children access APIs
-- [ ] Reports viewing APIs
-- [ ] Notifications APIs
-- [ ] Write unit tests
-
-### Week 4: Admin Tools
-
-- [ ] Parent management UI
-- [ ] Invite code generation
-- [ ] Link parent to student
-- [ ] Notification system backend
-
-### Week 5-8: Mobile App
-
-- [ ] Parent authentication screens
-- [ ] Dashboard implementation
-- [ ] Reports viewing with PDF export
-- [ ] Push notifications integration
+- [ ] React Native app for parents
 - [ ] Offline support
-- [ ] Charts & visualizations
-- [ ] Testing & deployment
+- [ ] Push notifications
+- [ ] Biometric authentication
+
+**Week 12: Polish & Launch**
+
+- [ ] Performance optimization
+- [ ] Security audit
+- [ ] User documentation
+- [ ] Deployment to production
 
 ---
 
@@ -1705,49 +1334,113 @@ CREATE TABLE parent_data_access_logs (
 
 ### Backend
 
-- **API**: Node.js + Express.js / NestJS
+- **Framework**: Node.js + Express.js or NestJS
 - **Database**: PostgreSQL 14+
-- **Authentication**: JWT
-- **Email**: SendGrid / AWS SES
+- **Authentication**: JWT (jsonwebtoken)
+- **Password**: bcrypt
+- **Validation**: Joi or Yup
+- **ORM**: Prisma or TypeORM
+- **Email**: SendGrid or AWS SES
 - **SMS**: Twilio (optional)
-- **PDF Generation**: PDFKit / Puppeteer
-- **Push Notifications**: Expo Push Notifications
+- **PDF**: PDFKit or Puppeteer
+- **Push Notifications**: Expo Push Service
 
-### Mobile App
+### Frontend (Mobile)
 
 - **Framework**: React Native with Expo
-- **Navigation**: Expo Router
-- **State Management**: Context API / Zustand
-- **Notifications**: expo-notifications
+- **Router**: Expo Router v6
+- **State**: Context API + Zustand
+- **UI**: NativeWind (Tailwind CSS)
 - **Charts**: react-native-chart-kit
-- **PDF Viewer**: react-native-pdf
 - **Storage**: AsyncStorage
+- **Notifications**: expo-notifications
+- **PDF Viewer**: react-native-pdf
+
+### DevOps
+
+- **Hosting**: AWS, Google Cloud, or DigitalOcean
+- **CI/CD**: GitHub Actions
+- **Monitoring**: Sentry
+- **Analytics**: Mixpanel or Amplitude
 
 ---
 
-## 🏁 Conclusion
+## 🎯 Quick Start Commands
 
-### Key Improvements in v1.1
+### Database Setup
 
-✅ **Parent Portal** - Complete authentication and authorization system  
-✅ **Report Access** - Parents can view all their children's reports  
-✅ **Progress Tracking** - Visual charts and statistics  
-✅ **Notifications** - Real-time updates via email/push/SMS  
-✅ **Security** - Invite codes, access control, audit logs  
-✅ **Mobile App** - Native experience for parents  
-✅ **Privacy** - GDPR compliance, data export, deletion
+```sql
+-- Create database
+CREATE DATABASE umx_db;
 
-### Benefits
+-- Run migrations (all 15 tables)
+-- Import schema from this document
 
-- 📈 **Increased Engagement**: Parents actively track progress
-- 🤝 **Better Communication**: Teachers & parents connected
-- 📊 **Data-Driven Insights**: Parents see actual progress
-- 🔒 **Secure & Private**: Role-based access control
-- 📱 **Convenience**: Access anytime, anywhere via mobile
+-- Seed initial data
+-- Domains, tags, admin user, sample students
+```
+
+### Backend Setup
+
+```bash
+cd backend
+npm install
+
+# Environment variables
+cp .env.example .env
+# Add: DATABASE_URL, JWT_SECRET, SENDGRID_API_KEY
+
+# Run migrations
+npm run migrate
+
+# Seed data
+npm run seed
+
+# Start server
+npm run dev # http://localhost:3000
+```
+
+### Frontend Setup
+
+```bash
+cd frontend
+npm install
+
+# Start Expo
+npm start
+
+# Run on Android
+npm run android
+
+# Run on iOS
+npm run ios
+```
 
 ---
 
-**Document Version:** 1.1 (Parent Portal)  
+## 📖 Summary
+
+**Database Tables:** 15  
+**API Endpoints:** 40+  
+**User Roles:** 3 (Admin, Teacher, Parent)  
+**Core Features:** 6 (Users, Students, Goals, Reports, Notifications, Analytics)
+
+**Key Features:**
+
+- ✅ Complete CRUD for students, goals, reports
+- ✅ Teacher dashboard with analytics
+- ✅ Parent portal with read-only access
+- ✅ Real-time notifications
+- ✅ PDF export for reports
+- ✅ Progress tracking over time
+- ✅ Secure authentication & authorization
+- ✅ Audit trail for all actions
+- ✅ Mobile app support
+
+---
+
+**Document Version:** 2.0 (Complete System)  
 **Last Updated:** October 21, 2025  
-**Status:** Ready for Implementation  
-**Migration from v1.0:** [See Migration Guide](#phase-1-database-setup-week-1)
+**Status:** ✅ Ready for Implementation  
+**Estimated Development Time:** 12 weeks  
+**Team Size:** 2-3 developers (1 backend, 1-2 frontend)
