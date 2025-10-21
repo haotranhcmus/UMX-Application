@@ -34,14 +34,14 @@ export default function SelectDomainGoalsScreen() {
     setSelectedCount(selected);
   }, [domains]);
 
-  const handlePress = () => {
+  const handleContinue = () => {
     console.log("Selected domains:", domains);
     console.log(
       "Selected goals:",
-      domains.map((d) => d.goals.filter((g) => g.isSelected))
+      domains.map((d) => d.goals.filter((g) => g.isSelected)),
     );
     // ✅ KHÔNG reset về MOCK_DOMAINS, giữ nguyên domains đã chọn
-    router.replace(`/create-report/${studentId}`);
+    router.replace(`/create-report/${studentId}/report-goal-results`);
   };
 
   const handleExit = () => {
@@ -71,7 +71,7 @@ export default function SelectDomainGoalsScreen() {
               isSelected,
             })),
           }
-        : domain
+        : domain,
     );
     setDomains(updatedDomains);
   };
@@ -80,17 +80,17 @@ export default function SelectDomainGoalsScreen() {
   const handleGoalToggle = (
     domainId: string,
     goalId: string,
-    isSelected: boolean
+    isSelected: boolean,
   ) => {
     const updatedDomains = domains.map((domain) =>
       domain.id === domainId
         ? {
             ...domain,
             goals: domain.goals.map((goal) =>
-              goal.id === goalId ? { ...goal, isSelected } : goal
+              goal.id === goalId ? { ...goal, isSelected } : goal,
             ),
           }
-        : domain
+        : domain,
     );
     setDomains(updatedDomains);
   };
@@ -142,7 +142,7 @@ export default function SelectDomainGoalsScreen() {
         <Pressable style={styles.button} onPress={handleExit}>
           <AppText bold>Quay lại</AppText>
         </Pressable>
-        <Pressable style={styles.button} onPress={handlePress}>
+        <Pressable style={styles.button} onPress={handleContinue}>
           <AppText style={{ color: theme.colors.primary }} bold>
             {`Tiếp tục (${selectedCount} / ${totalCount})`}
           </AppText>

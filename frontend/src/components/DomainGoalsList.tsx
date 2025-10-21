@@ -1,30 +1,10 @@
 import React, { useState, useMemo, useCallback } from "react";
-import {
-  View,
-  FlatList,
-  StyleSheet,
-  LayoutAnimation,
-  Platform,
-  UIManager,
-} from "react-native";
+import { View, FlatList, StyleSheet, LayoutAnimation } from "react-native";
 import { Domain } from "@/types/domain";
 import { SelectAllHeader } from "./DomainGoalsList/SelectAllHeader";
 import { DomainItem } from "./DomainGoalsList/DomainItem";
 import { GoalItem } from "./DomainGoalsList/GoalItem";
 import { theme } from "@/theme";
-
-// Enable LayoutAnimation on Android (Legacy Architecture only)
-// Suppress warning in New Architecture
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  try {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
-  } catch {
-    // Silently fail in New Architecture
-  }
-}
 
 interface DomainGoalsListProps {
   domains: Domain[];
