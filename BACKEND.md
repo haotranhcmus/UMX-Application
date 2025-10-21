@@ -1,4 +1,4 @@
-# �️ UMX Backend - Supabase Architecture
+# 🗄️  UMX Backend - Supabase Architecture
 
 **Dự án:** UMX - Student Intervention Management System (ABA)  
 **Backend:** Supabase (PostgreSQL + Auth + Storage + Realtime)  
