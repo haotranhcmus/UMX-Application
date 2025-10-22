@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { View, Text, Button } from "react-native";
+import { memo, useMemo } from "react";
 
-function UserCard({ user }: { user: { name: string; email: string } }) {
+const UserCard = memo(function UserCard({
+  user,
+}: {
+  user: { name: string; email: string };
+}) {
   console.log("UserCard rendered");
 
   return (
@@ -10,11 +15,11 @@ function UserCard({ user }: { user: { name: string; email: string } }) {
       <Text>{user.email}</Text>
     </View>
   );
-}
+});
 
 export default function App() {
   const [count, setCount] = useState(0);
-  const user = { name: "Hao", email: "hao@email.com" };
+  const user = useMemo(() => ({ name: "Hao", email: "hao@email.com" }), []);
 
   return (
     <View>
