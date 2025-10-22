@@ -1,0 +1,18 @@
+name: umx-backend
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - postgresql
+  - psycopg2
+  - pip
+  - pip:
+    - fastapi==0.104.1
+    - uvicorn[standard]==0.24.0
+    - sqlalchemy==2.0.23
+    - alembic==1.12.1
+    - python-jose[cryptography]==3.3.0
+    - passlib[bcrypt]==1.7.4
+    - python-dotenv==1.0.0
+    - pydantic==2.5.0
